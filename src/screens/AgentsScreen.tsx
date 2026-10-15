@@ -42,7 +42,7 @@ export function AgentsScreen() {
     <div className="page">
       <h1 className="sr-only">Agents</h1>
       <TaskComposer />
-      {snapshot.capabilities.mode === 'live' && snapshot.capabilities.identity ? <Suspense fallback={<div style={{ height: 190 }} />}><LocalActivity /></Suspense> : null}
+      {snapshot.capabilities.mode === 'live' && snapshot.capabilities.identity ? <Suspense fallback={null}><LocalActivity /></Suspense> : null}
       <section className="list tasks" aria-labelledby="tasks-title">
         <header className="list__head">
           <h2 id="tasks-title" className="list__filter" aria-current="page">

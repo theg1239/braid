@@ -10,6 +10,7 @@ import { Label } from '../pulls/Bits';
 import { RouterLink } from '../ui/Link';
 import { Stats } from '../ui/Status';
 import { RelativeTime } from '../ui/Time';
+import { agentName } from '../mission/identity';
 
 /*
  * Tasks as the pull request list draws them: one state icon in colour, the title, who worked
@@ -63,7 +64,7 @@ function endedAt(mission: Mission): string {
 
 /** Who worked on a task, by model: up to three names, then a count. */
 function agentNames(mission: Mission): string | null {
-  const names = [...new Set(mission.agents.map((agent) => agent.name))];
+  const names = [...new Set(mission.agents.map(agentName))];
   if (!names.length) return null;
   return names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
 }
