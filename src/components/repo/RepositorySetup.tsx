@@ -168,7 +168,7 @@ export function RepositoryForm() {
         }}
         tabs={[...(hasGitHub ? [{ value: 'github', label: 'GitHub' }] : []), { value: 'import', label: 'URL' }, { value: 'sample', label: 'Sample' }]}
       />
-      {source === 'github' ? <GitHubPicker onSelect={select} picked={github?.repositoryId ?? null} disabled={busy} /> : null}
+      {source === 'github' ? <GitHubPicker onSelect={select} picked={github?.repositoryId ?? null} disabled={busy} suggest={name} /> : null}
       {source === 'import' ? (
         <Input label="Git URL" type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://github.com/owner/repository" error={urlError} variant={urlError ? 'error' : 'default'} maxLength={500} passwordManagerIgnore />
       ) : null}
@@ -257,6 +257,7 @@ export function RepositorySetup() {
               Import from GitHub
             </h2>
             <GitHubPicker
+              suggest={projectName}
               action="Import"
               pending={typeof pending === 'number' ? pending : null}
               disabled={busy}

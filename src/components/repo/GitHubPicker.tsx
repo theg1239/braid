@@ -5,12 +5,17 @@ import type { GitHubConnection, GitHubInstallation, GitHubRepository, GitHubRepo
 import { api, errorMessage } from '../../lib/api';
 import { LoadMore } from '../ui/Scroll';
 
+/** Pages load on their own while seeking a name up to this many repositories; past it, scrolling loads them. */
+const SEEK_LIMIT = 1000;
+
 /**
  * The person's GitHub repositories, as Vercel lists them for import: the account, a search box,
  * and one row per repository with its action. `picked` marks a chosen row and `pending` one that
- * is being imported; changing the account clears the choice through `onSelect(null)`.
+ * is being imported; changing the account clears the choice through `onSelect(null)`. The list is ordered by what
+ * the person typed, or else by the name the repository will have: that name first, then names that start with it, then
+ * names that hold it. Until a repository has that exact name, further pages load on their own.
  */
-export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pending = null, disabled }: {
+export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pending = null, disabled, suggest = '' }: {
   onPick?: (selection: GitHubRepositorySelection, repository: GitHubRepository) => void;
   /** A form that keeps its own choice: called with the pick, and with null when the account changes. */
   onSelect?: (selection: GitHubRepositorySelection | null, repository?: GitHubRepository) => void;
@@ -18,6 +23,8 @@ export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pend
   picked?: number | null;
   pending?: number | null;
   disabled: boolean;
+  /** The name the repository will have in Braid: GitHub repositories with that name come first. */
+  suggest?: string;
 }) {
   const [own, setOwn] = useState<number | null>(null);
   const chosenId = picked === undefined ? own : picked;
@@ -84,6 +91,13 @@ export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pend
       repositoryGeneration.current++;
     };
   }, [installation, generation]);
+
+  // Keep reading pages while the name asked for has not turned up, so a repository past the first page still comes first.
+  const sought = (query.trim() || suggest.trim()).toLowerCase();
+  const found = !sought || repositories.some((repo) => repo.name.toLowerCase() === sought);
+  useEffect(() => {
+    if (!found && nextRepositories && !busy && !error && repositories.length < SEEK_LIMIT) void loadMore(false);
+  });
 
   async function authorize(install = false) {
     setBusy(true);
@@ -187,7 +201,8 @@ export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pend
   }
 
   const needle = query.trim().toLowerCase();
-  const visible = repositories.filter((repo) => repo.fullName.toLowerCase().includes(needle));
+  const target = needle || suggest.trim().toLowerCase();
+  const visible = rank(needle ? repositories.filter((repo) => repo.fullName.toLowerCase().includes(needle)) : repositories, target);
   const account = installations.find((item) => item.id === installation);
 
   return (
@@ -250,12 +265,15 @@ export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pend
                 </li>
               );
             })}
-            {!visible.length ? (
+            {!visible.length && (busy || nextRepositories) ? [0, 1, 2].map((row) => (
+              <li key={`loading-${row}`} className="gh-picker__row gh-picker__row--skeleton" aria-hidden="true"><span className="skeleton-line" /></li>
+            )) : null}
+            {!visible.length && !busy && !nextRepositories ? (
               <li className="gh-picker__row gh-picker__row--empty" role="status">
-                {busy ? 'Loading repositories…' : needle ? `No repository matches “${query.trim()}”.` : 'No repositories are shared with Braid yet.'}
+                {needle ? `No repository matches “${query.trim()}”.` : 'No repositories are shared with Braid yet.'}
               </li>
             ) : null}
-            {nextRepositories ? (
+            {visible.length && nextRepositories ? (
               <li className="gh-picker__more">
                 <LoadMore more={() => loadMore(false)} busy={busy || disabled} failed={!!error} label="Load more repositories" />
               </li>
@@ -288,4 +306,14 @@ export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pend
       {failure}
     </div>
   );
+}
+
+/** Repositories ordered by how well their name matches: exactly, then by its start, then anywhere; ties keep GitHub's order. */
+export function rank(repositories: GitHubRepository[], target: string): GitHubRepository[] {
+  if (!target) return repositories;
+  const score = (repo: GitHubRepository) => {
+    const name = repo.name.toLowerCase();
+    return name === target ? 0 : name.startsWith(target) ? 1 : name.includes(target) ? 2 : 3;
+  };
+  return repositories.map((repo, index) => ({ repo, index, score: score(repo) })).sort((a, b) => a.score - b.score || a.index - b.index).map((entry) => entry.repo);
 }
