@@ -301,10 +301,6 @@
   text-underline-offset: 3px;
 }
 
-.dash__more {
-  margin-top: 8px;
-}
-
 @media (max-width: 767px) {
   .dash :is(button, a) { min-width: 32px; min-height: 32px; }
   .dash .pr__title, .dash__repo-name, .dash__team-name a { display: inline-flex; align-items: center; }
@@ -350,10 +346,16 @@
   object-fit: cover;
 }
 
+.dash__stories {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: -8px;
+}
+
 .stories {
   display: flex;
-  gap: 14px;
-  margin: 2px -4px 18px;
+  gap: 16px;
+  margin: 0 -4px;
   padding: 4px 4px 6px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -366,10 +368,11 @@
 
 .story {
   display: flex;
+  flex: none;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: 64px;
+  width: 68px;
   scroll-snap-align: start;
 }
 
@@ -569,4 +572,15 @@ a.post__media:hover > img {
 
 @media (prefers-reduced-motion: reduce) {
   .story__ring, .post__media > img { transition: none; }
+}
+
+.feed__empty,
+.feed__error {
+  padding: 14px 0;
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+.feed .load-more {
+  margin-top: 12px;
 }

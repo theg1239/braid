@@ -32,7 +32,7 @@ describe('Explore filters', () => {
     expect(out).toContain('aria-label="Sort repositories"');
     expect(textOf(out)).toContain('Recently updated');
     expect(out).toContain('href="/example/relay"');
-    expect(textOf(out)).toContain('recorded example');
+    expect(textOf(out)).toContain('Recorded');
     expect(out).not.toContain('class="explore__count"');
   });
 
@@ -62,7 +62,7 @@ describe('Explore filters', () => {
     expect(textOf(out)).toContain('0 repositories');
     expect(textOf(out).match(/No repositories match your search\./g)).toHaveLength(1);
     expect(textOf(out)).not.toContain('Load more');
-    expect(out).not.toContain('recorded example');
+    expect(out).not.toContain('href="/example/relay"');
   });
 
   it('does not show zero results while loading or after a failed first request', () => {
@@ -78,7 +78,9 @@ describe('Explore filters', () => {
   it('deduplicates overlapping rows and the pinned example', () => {
     live.data!.items.push(live.data!.items[0], { owner: { slug: 'example', name: 'Example' }, repo: { slug: 'relay', name: 'Relay' }, updatedAt: '2026-10-11T10:00:00Z' });
     const out = html();
-    expect(out.match(/href="\/acmvit\/examcooker"/g)).toHaveLength(1);
-    expect(out.match(/href="\/example\/relay"/g)).toHaveLength(1);
+    // Each post links its picture and its name, once per repository.
+    expect(out.match(/<li class="post"/g)).toHaveLength(2);
+    expect(out.match(/href="\/acmvit\/examcooker"/g)).toHaveLength(2);
+    expect(out.match(/href="\/example\/relay"/g)).toHaveLength(2);
   });
 });

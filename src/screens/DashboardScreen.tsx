@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Button, LinkButton } from '@cloudflare/kumo';
 import { GitBranchIcon, GitPullRequestIcon, PlusIcon } from '@phosphor-icons/react';
 import { accountOwners, type Organization } from '../../shared/account';
@@ -7,19 +7,21 @@ import { plural } from '../lib/format';
 import { EXAMPLE_ADDRESS, addressPath, paths } from '../lib/router';
 import { useInbox, type InboxGroups, type InboxItem } from '../dashboard/inbox';
 import { setInboxBadge } from '../dashboard/badge';
-import { Feed } from '../dashboard/Feed';
+import { Posts, Stories, usePublicRepositories, type PublicRepositories } from '../dashboard/Feed';
 import { useAccount } from '../account/AccountProvider';
 import { ClaimOwner } from '../account/ClaimOwner';
 import { Label, PullStateIcon } from '../components/pulls/Bits';
 import { RouterLink } from '../components/ui/Link';
+import { ScrollArea } from '../components/ui/Scroll';
 import { InboxSkeleton } from '../components/ui/ScreenSkeleton';
 import { RelativeTime } from '../components/ui/Time';
 import '../styles/site.css';
 import '../styles/dashboard.css';
 
 /**
- * Signed in, `/` is the dashboard: what needs the person across their repositories and what their
- * agents merged lately, then what everyone else is building, beside their organizations’ repositories.
+ * Signed in, `/` is the dashboard: the owners active lately as a row of faces, then what needs the person across
+ * their repositories and what their agents merged lately beside their own repositories, then what everyone else is
+ * building as posts that keep loading as they scroll.
  */
 export function DashboardScreen() {
   const { account } = useAccount();
@@ -27,10 +29,11 @@ export function DashboardScreen() {
   const inbox = useInbox(account);
   const { now, data, groups, needsYou } = inbox;
   const canCreate = teams.some((team) => team.role === 'owner');
+  const repos = usePublicRepositories();
 
   useEffect(() => setInboxBadge(needsYou), [needsYou]);
 
-  if (!teams.some(team => team.workspaces.length)) return <FirstRun canCreate={canCreate} now={now} />;
+  if (!teams.some(team => team.workspaces.length)) return <FirstRun canCreate={canCreate} now={now} repos={repos} />;
 
   return (
     <div className="page dash">
@@ -43,6 +46,7 @@ export function DashboardScreen() {
           </LinkButton>
         ) : null}
       </header>
+      <div className="dash__stories"><Stories repos={repos} now={now} /></div>
       <div className="dash__main">
         {data.unavailable.length || inbox.error ? (
           <div className="dash__error" role="alert">
@@ -57,17 +61,32 @@ export function DashboardScreen() {
       <aside className="dash__side">
         <Repositories teams={teams} open={data.open} />
       </aside>
-      <Feed now={now} />
+      <Feed repos={repos} now={now} />
     </div>
   );
 }
 
+/** Everyone else's public repositories, below the person's own work. */
+function Feed({ repos, now }: { repos: PublicRepositories; now: number }) {
+  return (
+    <section className="feed" aria-labelledby="feed-title">
+      <h2 id="feed-title" className="dash__h2">
+        Explore
+        <RouterLink href={paths.explore()} className="feed__all">All repositories</RouterLink>
+      </h2>
+      <Posts repos={repos} now={now} empty="No other public repositories yet." />
+    </section>
+  );
+}
+
 const SECTIONS = [
-  { key: 'review', title: 'Needs your review' },
-  { key: 'returned', title: 'Returned to you' },
-  { key: 'merging', title: 'Merging' },
-  { key: 'merged', title: 'Recently merged' },
+  { key: 'review', title: 'Needs your review', rows: 5.5 },
+  { key: 'returned', title: 'Returned to you', rows: 5.5 },
+  { key: 'merging', title: 'Merging', rows: 3.5 },
+  { key: 'merged', title: 'Recently merged', rows: 3.5 },
 ] as const;
+/** A row's height; a section shows a part of the next row, so the reader sees there is more below. */
+const ROW = 74;
 
 function InboxSections({ groups, loading, now, incomplete }: { groups: InboxGroups; loading: boolean; now: number; incomplete: boolean }) {
   if (loading) return <InboxSkeleton />;
@@ -77,8 +96,6 @@ function InboxSections({ groups, loading, now, incomplete }: { groups: InboxGrou
 }
 
 function InboxSection({ section, items, now }: { section: typeof SECTIONS[number]; items: InboxItem[]; now: number }) {
-  // Merges are news, not work: the latest few, with the rest a click away.
-  const [shown, setShown] = useState(section.key === 'merged' ? 3 : 8);
   return (
     <section className={`dash__section--${section.key}`} aria-labelledby={`inbox-${section.key}`}>
       <h2 id={`inbox-${section.key}`} className="dash__h2">
@@ -86,10 +103,11 @@ function InboxSection({ section, items, now }: { section: typeof SECTIONS[number
         <span className="dash__count">{items.length}</span>
         {section.key === 'merged' ? <span className="dash__period">Last 24 hours</span> : null}
       </h2>
-      <ul className="list list__rows">
-        {items.slice(0, shown).map(item => <Row key={`${item.workspace.id}:${item.change.id}`} item={item} now={now} state={section.key === 'merging'} />)}
-      </ul>
-      {items.length > shown ? <Button className="dash__more" variant="secondary" size="sm" onClick={() => setShown(shown + 20)}>Show more</Button> : null}
+      <ScrollArea className="list" maxHeight={section.rows * ROW} label={section.title}>
+        <ul className="list__rows">
+          {items.map(item => <Row key={`${item.workspace.id}:${item.change.id}`} item={item} now={now} state={section.key === 'merging'} />)}
+        </ul>
+      </ScrollArea>
     </section>
   );
 }
@@ -178,13 +196,14 @@ function Repositories({ teams, open }: { teams: Organization[]; open: Record<str
 }
 
 /** Signed in without a repository: one way to start, with the example beside it; or no organization when sign-up is closed. */
-function FirstRun({ canCreate, now }: { canCreate: boolean; now: number }) {
+function FirstRun({ canCreate, now, repos }: { canCreate: boolean; now: number; repos: PublicRepositories }) {
   return (
     <div className="page dash dash--first">
       <header className="dash__head">
         <h1 className="dash__title">Dashboard</h1>
         <PersonalClaim />
       </header>
+      <div className="dash__stories"><Stories repos={repos} now={now} /></div>
       <section className="dash__first" aria-labelledby="first-title">
         <GitBranchIcon size={32} className="dash__first-icon" aria-hidden="true" />
         <h2 id="first-title" className="dash__first-title">
@@ -201,7 +220,7 @@ function FirstRun({ canCreate, now }: { canCreate: boolean; now: number }) {
           </LinkButton>
         </div>
       </section>
-      <Feed now={now} />
+      <Feed repos={repos} now={now} />
     </div>
   );
 }

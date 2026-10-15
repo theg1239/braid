@@ -7,14 +7,14 @@ import type { InboxData, InboxItem } from '../dashboard/inbox';
 
 vi.mock('../account/AccountProvider', () => ({ useAccount: () => ({ account }) }));
 vi.mock('../account/ClaimOwner', () => ({ ClaimOwner: () => <button>Claim account</button> }));
-vi.mock('../dashboard/Feed', () => ({ Feed: () => null }));
+vi.mock('../dashboard/Feed', () => ({ Posts: () => null, Stories: () => null, usePublicRepositories: () => ({}) }));
 vi.mock('../lib/live', () => ({ useLive: vi.fn() }));
 vi.mock('../lib/api', () => ({ request: vi.fn() }));
 vi.mock('../lib/hooks', () => ({ useNow: () => Date.parse('2026-10-12T12:00:00Z') }));
 vi.mock('../lib/router', () => ({
   EXAMPLE_ADDRESS: { owner: 'example', repo: 'relay' },
   addressPath: (a: { owner: string; repo: string }) => `/${a.owner}/${a.repo}`,
-  paths: { repo: (a: { owner: string; repo: string }) => `/${a.owner}/${a.repo}`, owner: (slug: string) => `/${slug}`, newRepository: () => '/new' },
+  paths: { repo: (a: { owner: string; repo: string }) => `/${a.owner}/${a.repo}`, owner: (slug: string) => `/${slug}`, newRepository: () => '/new', explore: () => '/explore' },
 }));
 vi.mock('../components/ui/Link', () => ({ RouterLink: ({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) => <a href={href} className={className}>{children}</a> }));
 
@@ -129,12 +129,13 @@ describe('Dashboard inbox rendering', () => {
     expect(textOf(out)).toContain('Pull request 1');
   });
 
-  it('counts the whole review section while initially showing eight rows with Show more', () => {
+  it('counts the whole review section and scrolls it in place, with no Show more', () => {
     vi.mocked(useLive).mockReturnValue(live({ items: Array.from({ length: 11 }, (_, i) => item(i, 'attention')), open: { w1: 11 }, unavailable: [] }));
     const out = html();
     expect(textOf(out)).toContain('Needs your review 11');
-    expect(out.match(/<li class="pr"/g)).toHaveLength(8);
-    expect(textOf(out)).toContain('Show more');
+    expect(out.match(/<li class="pr"/g)).toHaveLength(11);
+    expect(out).toMatch(/class="scroll-area__viewport" style="max-height:407px" tabindex="0" role="region" aria-label="Needs your review"/);
+    expect(textOf(out)).not.toContain('Show more');
   });
 
   it('shows when to retry a rate-limited inbox without claiming it is empty', () => {

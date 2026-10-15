@@ -89,7 +89,7 @@ describe('Explore', async () => {
     expect(words).toContain('Explore');
     expect(words).not.toContain('Public repositories on Braid');
     expect(out.indexOf('href="/example/relay"')).toBeLessThan(out.indexOf('href="/acmvit/examcooker"'));
-    expect(words).toContain('recorded example');
+    expect(words).toContain('Recorded');
     expect(words).toContain('Past papers');
     expect(words).toContain('Load more');
   });

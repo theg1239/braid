@@ -10,8 +10,14 @@ vi.mock('../lib/router', () => ({
   paths: { repo: (a: { owner: string; repo: string }) => `/${a.owner}/${a.repo}`, owner: (slug: string) => `/${slug}`, explore: () => '/explore' },
 }));
 vi.mock('../account/api', () => ({ accountApi: { repositories: vi.fn() } }));
+vi.mock('../lib/api', () => ({ errorMessage: String }));
 vi.mock('../components/ui/Link', () => ({ RouterLink: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a> }));
-import { Feed } from './Feed';
+import { Posts, Stories, usePublicRepositories } from './Feed';
+
+function Feed({ now }: { now: number }) {
+  const repos = usePublicRepositories();
+  return <><Stories repos={repos} now={now} /><Posts repos={repos} now={now} empty="No other public repositories yet." /></>;
+}
 
 const now = Date.parse('2026-10-16T12:00:00Z');
 const listing = (owner: string, repo: string, updatedAt: string, extra: Partial<RepositoryListing> = {}): RepositoryListing => ({ owner: { slug: owner, name: owner }, repo: { slug: repo, name: repo }, updatedAt, ...extra });
