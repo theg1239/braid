@@ -7,7 +7,7 @@ import { logFailure } from '../errors';
 
 const LANDING_TITLE = 'Braid · The Git platform for agent fleets';
 const DESCRIPTION = 'The Git platform for agent fleets. See which model wrote every line, who owns each agent, and merge pull requests under your rules.';
-const IMAGE_ALT = 'Braid, the Git platform for agent fleets';
+const IMAGE_ALT = 'Braid’s mark and name with “Give your agents room to breathe.” beside an aerial view of silver river channels converging into one across black volcanic sand.';
 
 function decode(segment: string): string {
   try { return decodeURIComponent(segment); } catch { return segment; }

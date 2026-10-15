@@ -5,7 +5,6 @@ import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/br
 import { errorMessage, resetWorkspaceCaches } from '../lib/api';
 import { EXAMPLE_ADDRESS, isAppPath, navigate, paths } from '../lib/router';
 import { useDocumentTitle } from '../lib/title';
-import { Mark } from '../components/shell/Mark';
 import { GlobalHeader } from '../components/shell/GlobalHeader';
 import { RouterLink } from '../components/ui/Link';
 import { useAccount } from './AccountProvider';
@@ -14,6 +13,7 @@ import { resetAddresses } from './addresses';
 import { accountApi, passkeyError } from './api';
 import { formatConnectCode, writeSession } from './session';
 import '../styles/account.css';
+import '../styles/signin.css';
 
 type Busy = 'email' | 'code' | 'passkey' | null;
 
@@ -165,7 +165,7 @@ export function SignIn({ next = null, confirm = false }: { next?: string | null;
   );
 }
 
-/** The sign-in page: the mark over one column of ways in, and the example quietly below. */
+/** A quiet way in, beside a braided river gathering into one main channel. */
 function SignInPage({ children, confirm = false }: { children: ReactNode; confirm?: boolean }) {
   const title = confirm ? 'Confirm it’s you' : 'Sign in to Braid';
   useDocumentTitle(confirm ? 'Confirm it’s you · Braid' : 'Sign in · Braid');
@@ -174,18 +174,38 @@ function SignInPage({ children, confirm = false }: { children: ReactNode; confir
       <a href="#main" className="skip-link">Skip to content</a>
       <GlobalHeader />
       <main id="main" className="signin__main" tabIndex={-1}>
-        <section className="signin__box" aria-labelledby="signin-title">
-          <Mark size={32} />
-          <h1 className="signin__title" id="signin-title">
-            {title}
-          </h1>
-          {children}
-        </section>
-        <footer className="signin__foot">
-          <RouterLink href={paths.repo(EXAMPLE_ADDRESS)} className="signin__example">
-            Explore the example
-          </RouterLink>
-        </footer>
+        <div className="signin__panel">
+          <section className="signin__box" aria-labelledby="signin-title">
+            <h1 className="signin__title" id="signin-title">
+              {title}
+            </h1>
+            {children}
+          </section>
+          <footer className="signin__foot">
+            <RouterLink href={paths.repo(EXAMPLE_ADDRESS)} className="signin__tour">
+              Take a tour
+            </RouterLink>
+          </footer>
+        </div>
+        <div className="signin__art" aria-hidden="true">
+          <picture>
+            <source media="(max-width: 800px)" type="image/avif" srcSet="/art/signin/river-phone.avif" />
+            <source media="(max-width: 800px)" type="image/webp" srcSet="/art/signin/river-phone.webp" />
+            <source type="image/avif" srcSet="/art/signin/river-desktop.avif" />
+            <img
+              src="/art/signin/river-desktop.webp"
+              width="1024"
+              height="1536"
+              alt=""
+              decoding="async"
+              draggable={false}
+              onLoad={(event) => {
+                const image = event.currentTarget;
+                void image.decode().then(() => { image.dataset.decoded = 'true'; }, () => {});
+              }}
+            />
+          </picture>
+        </div>
       </main>
     </div>
   );

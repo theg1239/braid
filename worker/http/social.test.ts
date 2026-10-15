@@ -59,7 +59,9 @@ describe('social tag attributes', () => {
     expect(tags).not.toContain('request.example');
     expect(tags).toContain('property="og:image:width" content="1200"');
     expect(tags).toContain('property="og:image:height" content="630"');
-    expect(tags).toContain('property="og:image:alt" content="Braid, the Git platform for agent fleets"');
+    const imageAlt = 'Braid’s mark and name with “Give your agents room to breathe.” beside an aerial view of silver river channels converging into one across black volcanic sand.';
+    expect(tags).toContain(`property="og:image:alt" content="${imageAlt}"`);
+    expect(tags).toContain(`name="twitter:image:alt" content="${imageAlt}"`);
     expect(tags).toContain('name="twitter:card" content="summary_large_image"');
   });
 
