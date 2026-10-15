@@ -1,0 +1,166 @@
+/*
+ * The task composer, on the Agents tab and in the New task dialog: the brief over one row of the
+ * branch, the agents and Start, in one box. Loaded with the composer wherever it opens.
+ */
+.task-composer {
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+  transition: border-color 0.15s;
+}
+
+.task-composer:has(.task-composer__input:focus) {
+  border-color: var(--line-strong);
+}
+
+.task-composer__input,
+.task-composer__input:focus {
+  display: block;
+  width: 100%;
+  padding: 12px 16px 4px;
+  border-radius: var(--radius-box) var(--radius-box) 0 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.task-composer__sample {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 12px 16px 4px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.task-composer__sample strong {
+  font-weight: 500;
+}
+
+.task-composer__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px 4px;
+}
+
+.task-composer__suggestions > button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.task-composer__suggestions > button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where the task starts and its limit, then the controls; the controls move below as one group when the line is full. */
+.task-composer__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 10px 10px 16px;
+  font-size: 12px;
+}
+
+.task-composer__context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.task-composer__controls {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.task-composer__limit {
+  flex: none;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+
+.task-composer__branch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 200px;
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+}
+
+.task-composer__branch svg {
+  flex: none;
+}
+
+.task-composer__branch span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The pickers shrink before Start does; a long name ends in an ellipsis. */
+.task-composer__agent,
+.task-composer__runner,
+.task-composer__agent > *,
+.task-composer__runner > * {
+  display: flex;
+  min-width: 0;
+}
+
+/* A set width, not a flex basis: the footer wraps the controls by this width instead of squeezing the runner. */
+.task-composer__agent { flex: 0 1 auto; width: 200px; }
+.task-composer__runner { flex: 0 1 auto; }
+.task-composer__agent > *, .task-composer__runner > *, .task-composer__agent [role='combobox'], .task-composer__runner [role='combobox'] { width: 100%; }
+
+.task-composer__submit {
+  flex: none;
+  margin-left: auto;
+}
+
+/* Why nothing can start, in the picker's place. */
+.task-composer__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.task-composer__error {
+  padding: 0 16px 12px;
+}
+
+.dialog .task-composer {
+  margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+  .task-composer__input, .task-composer__input:focus, .task-composer__sample, .task-composer__suggestions { padding-inline: 12px; }
+  .task-composer__footer { padding-left: 12px; }
+  .task-composer__branch { max-width: 96px; }
+}
+
+/* ---------- Connecting an agent, from the picker ---------- */
+
+.agent-connect { width: min(420px, calc(100vw - 32px)); display: grid; gap: 14px; padding: 16px; }
+.agent-connect__title { font-weight: 600; }
+.agent-connect__body { display: grid; justify-items: start; gap: 12px; min-width: 0; font-size: 13px; color: var(--fg-2); }
+.agent-connect__body > * { max-width: 100%; }
+.agent-connect__headers { display: grid; gap: 4px; font-family: var(--font-mono); font-size: 11px; }
+.agent-connect__headers dt { color: var(--fg-3); }
+.agent-connect__headers dt:not(:first-child) { margin-top: 8px; }
+.agent-connect__headers dd { overflow-wrap: anywhere; }
+.agent-connect__command { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11.5px; line-height: 1.6; }

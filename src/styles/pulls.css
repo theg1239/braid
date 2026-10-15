@@ -1,0 +1,605 @@
+/*
+ * Pull requests: the list, one pull request with its conversation, checks and files, and the
+ * merge box. Laid out as GitHub lays them out; the only colour is state colour.
+ */
+
+/* ---------- State ---------- */
+
+.pr-state {
+  flex: none;
+  margin-top: 2px;
+}
+
+.pr-state[data-state='open'] {
+  color: var(--ok);
+}
+
+.pr-state[data-state='merged'] {
+  color: var(--merged);
+}
+
+.pr-state[data-state='closed'] {
+  color: var(--danger);
+}
+
+.state-badge {
+  gap: 5px;
+  padding-left: 9px;
+  padding-right: 10px;
+  font-size: 13px;
+}
+
+.status-badge {
+  flex: none;
+}
+
+.review-state,
+.check-state {
+  flex: none;
+  color: var(--fg-4);
+}
+
+.review-state[data-state='approved'],
+.check-state[data-state='passed'] {
+  color: var(--ok);
+}
+
+.review-state[data-state='changes'],
+.check-state[data-state='failed'] {
+  color: var(--danger);
+}
+
+.review-state[data-state='needed'],
+.check-state[data-state='warning'] {
+  color: var(--warn);
+}
+
+.review-state[data-state='pending'],
+.check-state[data-state='reported'] {
+  color: var(--fg-3);
+}
+
+.label {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.label[data-tone='warning'] {
+  border-color: color-mix(in oklch, var(--warn) 55%, var(--line));
+  color: var(--warn-text);
+}
+
+.label[data-tone='danger'] {
+  border-color: color-mix(in oklch, var(--danger) 55%, var(--line));
+  color: var(--danger);
+}
+
+.label[data-tone='simulated'] {
+  border-style: dashed;
+  color: var(--fg-3);
+}
+
+/* Model, owner and tool wrap as whole words on a narrow screen rather than losing letters. */
+.author {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+
+.author__name,
+.author__owner,
+.author__detail {
+  white-space: nowrap;
+}
+
+.author__name {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.author__detail {
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.author__owner {
+  color: var(--fg-3);
+}
+
+.risk {
+  flex: none;
+  color: var(--fg-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.risk[data-risk='medium'] {
+  color: var(--warn-text);
+}
+
+.risk[data-risk='high'] {
+  color: var(--danger);
+}
+
+/* ---------- The list box ---------- */
+
+.pulls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pulls-bar__search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* One agent's pull requests: the agent as the filter, with its clear. */
+.agent-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.agent-filter__clear {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--fg-3);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.agent-filter__clear:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+/* The merge queue above the list: one quiet line, or a warning line with its reason and Resume. */
+.queue-line {
+  min-height: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-bottom: 12px;
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+.queue-line__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-2);
+}
+
+.queue-line[data-state='merging'] .queue-line__link {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.queue-line__link:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.queue-line--paused {
+  display: block;
+}
+
+.list__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--sunken);
+}
+
+.list__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-2);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.list__filter:hover {
+  color: var(--fg);
+}
+
+.list__filter[aria-current='page'] {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.list__filter--needs {
+  margin-left: auto;
+}
+
+.list__count {
+  color: var(--fg-3);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.list__filter[aria-current='page'] .list__count {
+  color: var(--fg-2);
+}
+
+.list__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.list__rows > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.list__more {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.list .state {
+  padding: 40px 16px;
+}
+
+.pr {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 58px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px 12px;
+  padding: 9px 16px 10px;
+  transition: background-color 0.15s;
+}
+
+.pr:hover {
+  background: var(--hover);
+}
+
+.pr__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pr__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.pr__title {
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.pr__title::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+}
+
+.pr__title:hover {
+  color: var(--focus);
+}
+
+.pr__title:focus-visible {
+  outline: none;
+}
+
+.pr:has(.pr__title:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.pr .label,
+.pr .text-link,
+.pr .status-badge {
+  position: relative;
+  z-index: 1;
+}
+
+.pr__meta {
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.pr__num {
+  font-variant-numeric: tabular-nums;
+}
+
+.pr__checks {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 20px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pr__checks:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.pr__checks[data-state='passed'] {
+  color: var(--ok);
+}
+
+.pr__checks[data-state='failed'] {
+  color: var(--danger);
+}
+
+.pr__checks[data-state='pending'] {
+  color: var(--warn);
+}
+
+/* Lines added and removed, then the checks link, on the right of a row. */
+.pr__right {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.pr__stats {
+  font-size: 11.5px;
+}
+
+/* ---------- One pull request ---------- */
+
+.pull-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pull-head__title {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 34px;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.pull-head__num {
+  color: var(--fg-3);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.pull-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--fg-2);
+  font-size: 13.5px;
+}
+
+/* Lines added and removed, and the menu of lesser actions, on the right of the meta row. */
+
+.branch-chip {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--selected);
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* As the repository's tabs: the hover shade sits on the label, so it never covers the selected underline. */
+
+.verdict {
+  flex: none;
+  color: var(--fg-3);
+}
+
+.verdict[data-verdict='approve'] {
+  color: var(--ok);
+}
+
+.verdict[data-verdict='revise'],
+.verdict[data-verdict='reject'] {
+  color: var(--danger);
+}
+
+.verdict[data-verdict='escalate'] {
+  color: var(--warn);
+}
+
+/* ---------- Conversation ---------- */
+
+/* A rail runs from the description to the merge box, as on GitHub. */
+
+/* ---------- Merge box ---------- */
+
+/* A row with detail behind it opens in place, as GitLab's gate rows do. */
+
+/* ---------- Checks: GitHub's list, one box, grouped by where they ran ---------- */
+
+.checks__summary {
+  color: var(--fg-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.checks__box {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+/* A finding is the whole message, so it wraps instead of trailing off. */
+
+/* ---------- Files changed ---------- */
+
+/* Conflicts: where both started, what main says now, what the pull request says. */
+
+/* The three line numbers a region starts at, above the region as Git marks it. */
+
+/* Unified or split, above Files changed, as on GitHub. */
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 560px) {
+  .pull-head__title {
+    font-size: 21px;
+    line-height: 28px;
+  }
+
+  .pr {
+    gap: 2px 10px;
+    padding: 9px 12px 10px;
+  }
+}
+
+/* The merged heading keeps its hash and time on one line when there is room. */
+
+.pr-state[data-status='attention'],
+.pull-head__next[data-status='attention'] {
+  color: var(--warn-text);
+}
+
+.pr-state[data-status='revise'],
+.pull-head__next[data-status='revise'] {
+  color: var(--danger);
+}
+
+.pr-state[data-status='queued'],
+.pr-state[data-status='landing'] {
+  color: var(--fg-2);
+}
+
+.pr__progress {
+  color: var(--fg-2);
+}
+
+@media (max-width: 560px) {
+  .pr {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .pr__right {
+    grid-column: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .pull .pull-tabs__list {
+    gap: 0;
+  }
+
+  .pull .pull-tab {
+    font-size: 13px;
+  }
+
+  .pull .pull-tab__label {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+}
+.pr__comments { display: inline-flex; align-items: center; gap: 4px; color: var(--fg-3); font-size: 12px; }
+
+/* Visible rows are measured on their first paint; estimated offscreen heights must not move the next section. */
+.list__rows > .pr:nth-child(-n + 10) { content-visibility: visible; contain-intrinsic-block-size: none; }
+
+/* Shared questions also appear on agent tasks. */
+
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.question__heading {
+  color: var(--fg);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 24px;
+  text-wrap: balance;
+}
+
+.question__detail {
+  max-width: 76ch;
+  color: var(--fg-2);
+  line-height: 21px;
+  text-wrap: pretty;
+}
+
+.question__answers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.question__error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+@media (max-width: 560px) {
+
+  .question__answers > button:first-child {
+    flex-basis: 100%;
+  }
+
+  .question__answers > button {
+    flex-grow: 1;
+  }
+}
+/* The network read and the highlighting worker share the file's reserved area. */
+.fsec__diff { display: grid; min-width: 0; }
+.fsec__diff > * { grid-area: 1 / 1; min-width: 0; }
+.fsec__code-placeholder { overflow: hidden; padding: 8px 16px; }
+.fsec__code-placeholder .code-skeleton__row { height: var(--diff-line-height); }
+.fsec__sizing > .line-conversations { margin-left: 32px; visibility: hidden; font-size: 12.5px; line-height: var(--diff-line-height); }
+.fsec__diff:has(.fsec__render > .code:not(.code--pending)) > .fsec__sizing { visibility: hidden; }
+.fsec__render > .code-skeleton, .fsec__render > .code--pending { height: 100%; min-height: 0 !important; overflow: hidden; }
+.fsec__render > .code--pending { position: absolute; inset: 0; visibility: hidden; }
+.fsec__render { position: relative; }

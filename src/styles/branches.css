@@ -1,0 +1,68 @@
+.branch-menu__all {
+  padding: 10px 8px 4px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-2);
+  font-size: 13px;
+}
+
+.branch-menu__all:hover { color: var(--fg); text-decoration: underline; }
+.branches__sections, .compare__files { display: flex; flex-direction: column; gap: 16px; }
+.branches__copying { margin-bottom: 16px; }
+.branches__section { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-box); background: var(--panel); }
+.branches__heading { padding: 12px 16px; background: var(--panel-raised); font-size: 14px; font-weight: 600; }
+.branches__section ul { list-style: none; margin: 0; padding: 0; }
+.branches__row, .compare__commit { display: flex; align-items: center; gap: 14px; padding: 16px; border-top: 1px solid var(--line); }
+.branches__row > svg, .compare__commit > svg { flex: none; }
+.branches__details { display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; }
+.branches__name { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.branches__title, .compare__commit-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.branches__title { color: var(--fg-2); }
+.branches__name:hover, .branches__title:hover, .compare__commit-title:hover { text-decoration: underline; }
+.branches__meta { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--fg-3); font-size: 12px; }
+.branches__actions { display: flex; flex: none; align-items: center; gap: 12px; }
+.branches__compare-slot { min-width: 80px; min-height: 32px; }
+.branches__pull-slot { display: flex; align-items: center; justify-content: center; width: 80px; height: 32px; }
+.branches__pull-request { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-box); font-size: 12px; white-space: nowrap; }
+.branches__pull-request:hover { background: var(--panel-raised); }
+.compare__refs { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 16px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: var(--radius-box); background: var(--panel); }
+.compare__pull-request { display: flex; align-items: center; min-height: 32px; margin-bottom: 24px; font-size: 14px; }
+.compare__pull-request a { display: inline-flex; align-items: center; gap: 8px; }
+.compare__pull-request a:hover { text-decoration: underline; }
+.compare__commits { margin-bottom: 24px; }
+.compare__commit { padding: 12px 16px; }
+.compare__hash { flex: none; font-size: 12px; color: var(--fg-2); }
+.compare__empty { padding: 16px; border-top: 1px solid var(--line); font-size: 13px; }
+.compare__files-head { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.compare__files-head h2 { font-size: 14px; font-weight: 600; }
+.compare__files-head h2 span { margin-left: 6px; font-weight: 400; }
+.compare__style { margin-left: auto; }
+.compare__file { min-width: 0; overflow: clip; border: 1px solid var(--line); border-radius: var(--radius-box); background: var(--panel); }
+.compare__file-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--panel-raised); font-size: 12px; }
+.compare__file-toggle { display: flex; align-items: center; flex: 1; gap: 8px; min-width: 0; padding: 0; border: 0; color: var(--fg); background: transparent; text-align: left; cursor: pointer; }
+.compare__file-toggle svg { flex: none; }
+.compare__file-toggle[aria-expanded='true'] svg { transform: rotate(90deg); }
+.compare__file-toggle span { overflow-wrap: anywhere; }
+.compare__file-body { border-top: 1px solid var(--line); }
+.compare__file-body .code--empty { display: flex; gap: 12px; }
+@media (max-width: 600px) {
+  .branches__row { align-items: flex-start; gap: 10px; padding: 12px; }
+  .branches__row > svg { display: none; }
+  .branches__actions { flex-direction: column-reverse; gap: 8px; }
+  .compare__refs { gap: 8px; padding: 12px; }
+  .compare__refs .branch-menu__trigger { max-width: calc(100% - 42px); }
+  .compare__refs > svg { display: none; }
+  .compare__commit { gap: 10px; padding: 12px; }
+  .compare__commit > svg { display: none; }
+  .compare__file-head { flex-wrap: wrap; gap: 8px; }
+  .compare__file-note { display: none; }
+}
+
+@media (max-width: 767px) {
+  .branches :is(button, a), .compare :is(button, a) { min-width: 32px; min-height: 32px; }
+  .compare [role='tablist'] { height: 38px; }
+  .branches__details a, .compare__hash { display: inline-flex; align-items: center; }
+  .branches__title, .compare__commit-title { white-space: normal; overflow-wrap: anywhere; }
+  .branches__meta { align-items: center; }
+  .compare__commit { flex-wrap: wrap; }
+  .compare__commit .branches__details { flex-basis: 100%; }
+}

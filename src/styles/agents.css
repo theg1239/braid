@@ -1,0 +1,326 @@
+/*
+ * The Agents tab, laid out like Pull requests: the composer (composer.css), the tasks as rows
+ * like the pull request list, and the fleet as one row per model, owner and tool. Loaded with
+ * the Agents screen. Colour marks state and nothing else.
+ */
+
+/* ---------- Tasks ---------- */
+
+.tasks + .fleet {
+  margin-top: 16px;
+}
+
+/* An empty list is one quiet line inside its section. */
+.agents-empty {
+  padding: 14px 16px;
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+/* One mark per task, in the state's colour: what it waits for, or how it ended. */
+.task-state {
+  flex: none;
+  margin-top: 2px;
+  color: var(--fg-3);
+}
+
+.task-state[data-state='decide'],
+.task-state[data-state='blocked'] {
+  color: var(--warn);
+}
+
+.task-state[data-state='ready'],
+.task-state[data-state='open'] {
+  color: var(--ok);
+}
+
+.task-state[data-state='working'] {
+  color: var(--info);
+}
+
+.task-state[data-state='merged'] {
+  color: var(--merged);
+}
+
+.task-state[data-state='failed'],
+.task-state[data-state='closed'] {
+  color: var(--danger);
+}
+
+.task__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.task__meta > *:not(:last-child)::after {
+  margin: 0 6px;
+  color: var(--fg-4);
+  content: '·';
+}
+
+.task__agents {
+  color: var(--fg-2);
+}
+
+/* ---------- Fleet ---------- */
+
+.fleet__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fleet__table th {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.fleet__table td {
+  padding: 9px 12px;
+  vertical-align: middle;
+}
+
+.fleet__table tbody tr + tr td {
+  border-top: 1px solid var(--line);
+}
+
+/* The agent takes the width; the counts sit tight on the right. */
+.fleet__table th:first-child,
+.fleet__table td:first-child {
+  width: 100%;
+  padding-left: 16px;
+}
+
+.fleet__table th:last-child,
+.fleet__table td:last-child {
+  padding-right: 16px;
+}
+
+.fleet__table .fleet__n {
+  padding-left: 20px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The whole row opens the agent's pull requests; the name is the link. */
+.fleet__row {
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.fleet__row:hover {
+  background: var(--hover);
+}
+
+.fleet__row:hover .fleet__name {
+  color: var(--focus);
+}
+
+.fleet__agent:focus-visible {
+  outline: none;
+}
+
+.fleet__row:has(.fleet__agent:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.fleet__agent {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.fleet__name {
+  color: var(--fg);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.fleet__owner {
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+
+.fleet__tool {
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+td.fleet__n[data-zero],
+.fleet__num[data-zero] {
+  color: var(--fg-4);
+}
+
+/*
+ * Lines still on main: the number, then a short bar on a track the length of the busiest
+ * agent's lines. The lighter tail is what the agent added that main has since lost.
+ */
+.fleet__table .fleet__lines {
+  padding-left: 20px;
+  white-space: nowrap;
+}
+
+.fleet__measure {
+  display: grid;
+  grid-template-columns: 5ch 64px;
+  align-items: center;
+  gap: 10px;
+}
+
+.fleet__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fleet__bar {
+  position: relative;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--line) 80%, transparent);
+}
+
+.fleet__bar i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 2px;
+}
+
+.fleet__bar-added {
+  width: calc(var(--added) * 100%);
+  background: var(--line-strong);
+}
+
+.fleet__bar-alive {
+  width: calc(var(--alive) * 100%);
+  background: var(--fg-3);
+}
+
+.fleet__skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.fleet__skeleton-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 80px 120px;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+.fleet__skeleton-row + .fleet__skeleton-row {
+  border-top: 1px solid var(--line);
+}
+
+.fleet__skeleton-row .skeleton-line {
+  width: 100%;
+}
+
+.fleet__skeleton-row .skeleton-line:first-child {
+  width: 45%;
+}
+
+.fleet__short {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* Every column fits beside the names: the tool and the bar go, the last header shortens, and the cells tighten. */
+  .fleet__tool,
+  .fleet__bar,
+  .fleet__long {
+    display: none;
+  }
+
+  .fleet__short {
+    display: inline;
+  }
+
+  .fleet__name {
+    white-space: normal;
+  }
+
+  .fleet__table th,
+  .fleet__table td {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .fleet__table th:first-child,
+  .fleet__table td:first-child {
+    padding-left: 12px;
+  }
+
+  .fleet__table th:last-child,
+  .fleet__table td:last-child {
+    padding-right: 12px;
+  }
+
+  .fleet__measure {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .fleet__skeleton-row {
+    grid-template-columns: minmax(0, 1fr) 56px 56px 72px;
+  }
+}
+
+.tasks .list__head { flex-wrap: wrap; gap: 4px 16px; }
+.tasks__filters { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.tasks__filter { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 5px; color: var(--fg-3); font-size: 12px; cursor: pointer; }
+.tasks__filter:hover { background: var(--hover); color: var(--fg); }
+.tasks__filter[aria-pressed='true'] { background: var(--selected); color: var(--fg); }
+.tasks__filter span { font-variant-numeric: tabular-nums; color: var(--fg-3); }
+.fleet__expand { width: 32px; }
+.fleet__mobile-counts { display: none; }
+.fleet__detail > td { padding: 0 !important; background: var(--sunken); }
+.fleet__row[data-expanded] { background: var(--selected); }
+.agent-detail { display: grid; gap: 16px; padding: 18px 20px; }
+.agent-detail__metrics { display: flex; flex-wrap: wrap; gap: 16px 40px; }
+.agent-detail__metrics dt { color: var(--fg-3); font-size: 12px; }
+.agent-detail__metrics dd { margin-top: 4px; font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.agent-detail__metrics dd span { display: block; margin-top: 3px; color: var(--fg-3); font-size: 12px; font-weight: 400; }
+.agent-detail__heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 12px; }
+.agent-detail__heading strong { font-weight: 500; }
+.agent-detail__pulls li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.agent-detail__pulls li > a { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.agent-detail__pulls li > a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.agent-detail__pulls .pr-state { margin: 0; }
+.agent-detail__error { color: var(--warn-text); font-size: 12px; }
+
+@media (max-width: 640px) {
+  .fleet__table [data-column], .fleet__added { display: none; }
+  .fleet__mobile-counts { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 6px; color: var(--fg-3); font-size: 11px; }
+  .fleet__table .fleet__lines { width: 58px; text-align: right; }
+  .fleet__table .fleet__expand { width: 32px; padding-inline: 4px; }
+  .fleet__agent { column-gap: 6px; }
+  .agent-detail { padding: 14px 12px; }
+  .agent-detail__metrics { gap: 16px 24px; }
+  .agent-detail__metrics > div:first-child { flex-basis: 100%; }
+  .tasks__filters { margin-left: 0; }
+  .tasks__filter { padding: 5px 6px; }
+}
+
+.agent-detail__runs { display: grid; gap: 8px; }
+.agent-detail__runs ul { padding: 0; margin: 0; list-style: none; }
+.agent-detail__runs li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 6px 0; }
+.agent-detail__runs li span { color: var(--fg-3); font-variant-numeric: tabular-nums; white-space: nowrap; }

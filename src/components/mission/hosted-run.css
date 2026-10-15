@@ -1,0 +1,19 @@
+.hosted-runs { display: grid; gap: 12px; margin: 16px 0; }
+.hosted-runs:empty { display: none; }
+.hosted-run { min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 16px; font-size: 13px; }
+.hosted-run__heading { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.hosted-run__heading > span, .hosted-run__evidence, .hosted-run time { color: var(--fg-3); }
+.hosted-run__message { margin: 0 0 8px; line-height: 1.5; overflow-wrap: anywhere; }
+.hosted-run__evidence { display: grid; gap: 4px; margin: 0 0 10px; font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.hosted-run__evidence code { color: var(--fg-2); font: inherit; white-space: pre-wrap; }
+.hosted-run__retry { margin: 8px 0; }
+.hosted-run details { margin-top: 12px; }
+.hosted-run summary { cursor: pointer; font-size: 12px; }
+.hosted-run pre { margin: 10px 0 0; padding: 12px; background: var(--sunken); max-height: 220px; overflow: auto; font: 12px/1.6 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.hosted-run dl { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 8px 12px; margin: 12px 0 0; }
+.hosted-run dd { margin: 0; overflow-wrap: anywhere; }
+.hosted-run dd code { white-space: pre-wrap; }
+.hosted-run ol { list-style: none; padding: 0; margin: 12px 0 0; }
+.hosted-run li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+.hosted-run time { white-space: nowrap; font-size: 11px; }
+@media (max-width: 600px) { .hosted-run { padding: 12px; } .hosted-run li { display: block; } .hosted-run time { display: block; margin-top: 3px; } }

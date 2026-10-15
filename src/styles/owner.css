@@ -1,0 +1,129 @@
+.owner {
+  max-width: calc(1120px + 2 * var(--page-x));
+  padding-top: 40px;
+}
+
+.owner__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  min-height: 72px;
+  margin-bottom: 32px;
+}
+
+.owner__title {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 34px;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+
+.owner__count {
+  color: var(--fg-3);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.owner__repo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+
+.owner__repo:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.owner__repo-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.owner__repo-name {
+  color: var(--fg);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+  overflow-wrap: anywhere;
+}
+
+.owner__repo-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.owner__description {
+  max-width: 72ch;
+  color: var(--fg-2);
+  font-size: 14px;
+  line-height: 21px;
+  overflow-wrap: anywhere;
+}
+
+.owner__updated {
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.owner__empty {
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+  color: var(--fg-3);
+  font-size: 14px;
+}
+
+.owner__skeleton-tabs { display: flex; align-items: center; gap: 24px; min-height: 47px; margin-bottom: 28px; border-bottom: 1px solid var(--line); }
+
+@media (max-width: 920px) {
+  .owner {
+    padding-top: 28px;
+  }
+}
+
+.owner__identity { min-width: 0; flex: 1; }
+.owner__identity .owner__address { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.owner__claim { min-width: 110px; min-height: 32px; }
+@media (max-width: 560px) { .owner__head:has(.owner__claim) { gap: 12px; } }
+.owner__icon { display: grid; place-items: center; width: 72px; height: 72px; border: 1px solid var(--line); border-radius: 8px; color: var(--fg-2); flex: none; }
+.owner__address { color: var(--fg-3); font-size: 14px; }
+.org-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--line); overflow-x: auto; margin-bottom: 28px; }
+.org-tabs a { display: flex; align-items: center; gap: 8px; padding: 12px 16px; white-space: nowrap; border-bottom: 2px solid transparent; color: var(--fg-2); font-size: 14px; }
+.org-tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--fg); font-weight: 600; }
+.org-counts { display: flex; gap: 24px; color: var(--fg-2); margin-bottom: 28px; font-size: 14px; }
+.org-section-head, .org-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.org-section-head h2 { font-size: 16px; font-weight: 600; }
+.org-actions { justify-content: flex-start; margin: 0; flex-wrap: wrap; }
+.org-filters { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.org-filters > :first-child { flex: 1; min-width: 120px; }
+.org-empty { padding: 48px 24px; border: 1px solid var(--line); border-radius: 6px; display: grid; justify-items: center; gap: 20px; }
+.org-empty h2 { font-size: 18px; font-weight: 600; }
+.org-more { display: block; padding: 16px 0; font-size: 14px; }
+@media (max-width: 600px) {
+  .owner { padding-top: 24px; }
+  .owner__head { min-height: 56px; }
+  .owner__title { font-size: 24px; }
+  .owner__icon { width: 56px; height: 56px; }
+  .org-tabs { gap: 0; }
+  .org-tabs a { justify-content: center; flex: 1; gap: 4px; padding: 12px 4px; font-size: 13px; }
+  .org-filters { flex-wrap: wrap; }
+  .org-filters > :first-child { flex-basis: 100%; }
+  .org-section-head { flex-wrap: wrap; }
+}
+
+.org-team-name { margin: 8px 0; font-size: 24px !important; }
+.org-team-danger { display: flex; justify-content: flex-end; margin-top: 24px; }
+.org-error { margin: 16px 0; }
+.org-tabs--team { margin-top: 24px; }
+
+.owner__avatar { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.owner__icon:has(.owner__avatar) { padding: 0; overflow: hidden; }

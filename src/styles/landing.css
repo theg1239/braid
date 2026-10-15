@@ -1,0 +1,2980 @@
+/*
+ * The landing page. Near-black with cool greys, one column of 1120px, the product drawn as the app
+ * draws it. Radii: buttons 999px, chips and inner panels 6-8px, windows and cards 12px. Colour is
+ * for state only: merged purple, sent back red, merging green, needs a person amber.
+ */
+
+.landing {
+  --l-bg: #08090a;
+  --l-1: #0e0f10;
+  --l-2: #131416;
+  --l-3: #1a1b1e;
+  --l-line: rgb(255 255 255 / 0.08);
+  --l-line-2: rgb(255 255 255 / 0.05);
+  --l-fg: #f7f8f8;
+  --l-fg-2: #d0d6e0;
+  --l-fg-3: #8a8f98;
+  --l-fg-4: var(--fg-4);
+  --l-accent: #7c8cff;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--l-bg);
+  color: var(--l-fg);
+}
+
+/* ---------- Header ---------- */
+
+/* Where the page begins: once it scrolls out of view, the header floats. */
+.site-head__top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 24px;
+  pointer-events: none;
+}
+
+/* On the sky at the top: no surface and no edge. The band itself lets clicks through to the page. */
+.landing .site-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border: 0;
+  background: none;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+
+/* Brand left, the places to look centred on the page, the ways in right. */
+.landing .site-head__bar {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  max-width: calc(1120px + 2 * var(--page-x));
+  min-height: 64px;
+}
+
+.landing .site-head__bar > * {
+  pointer-events: auto;
+  transition: transform 0.6s var(--ease-out);
+}
+
+/* The capsule: a near-black surface with a hairline edge, behind the groups once they gather in the middle. */
+.landing .site-head__bar::before {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: var(--capsule, 0px);
+  height: 44px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 999px;
+  background: rgb(10 11 12 / 0.85);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateX(-50%) scale(0.96);
+  transition:
+    opacity 0.4s var(--ease-out),
+    transform 0.6s var(--ease-out);
+  content: '';
+  pointer-events: none;
+}
+
+.landing .site-head[data-floating] .site-head__bar::before {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
+.landing .site-head[data-floating] .brand {
+  transform: translateX(var(--to-brand, 0));
+}
+
+.landing .site-head[data-floating] .site-head__nav {
+  transform: translateX(var(--to-nav, 0));
+}
+
+.landing .site-head[data-floating] .site-head__actions {
+  transform: translateX(var(--to-actions, 0));
+}
+
+.landing .site-head .brand {
+  justify-self: start;
+}
+
+.landing .site-head__nav {
+  gap: 2px;
+}
+
+.landing .site-head__link {
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: var(--l-fg-3);
+  font-size: 13.5px;
+}
+
+.landing .site-head__link:hover {
+  background: none;
+  color: var(--l-fg);
+}
+
+.landing .site-head a:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+.landing .site-head__actions {
+  justify-self: end;
+  gap: 4px;
+}
+
+.site-head__cta {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--l-fg, #f7f8f8);
+  color: var(--l-bg, #08090a);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 0.15s;
+}
+
+.site-head__cta:hover {
+  background: #fff;
+}
+
+.lp {
+  flex: 1;
+  width: 100%;
+  max-width: calc(1120px + 2 * var(--page-x));
+  margin: 0 auto;
+  padding: 0 var(--page-x);
+  outline: none;
+}
+
+/* ---------- Hero ---------- */
+
+.lp-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 104px;
+  text-align: center;
+}
+
+/* What Braid is, said small above the claim. */
+.lp-hero__eyebrow {
+  margin-bottom: 22px;
+  color: var(--l-fg-3);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: -0.005em;
+}
+
+.lp-hero__title {
+  max-width: 12em;
+  color: var(--l-fg);
+  font-size: clamp(42px, 6.2vw, 76px);
+  font-weight: 520;
+  line-height: 1;
+  letter-spacing: -0.032em;
+  text-wrap: balance;
+}
+
+/*
+ * Cloudflare's Copy prompt pill: a 40px pill on the card colour with a hairline ring, four agents' marks at 20px
+ * 3px apart, then the label at 16px. Both labels sit in one cell, so the pill keeps the width of the longer.
+ */
+.lp-prompt-slot {
+  display: inline-flex;
+}
+
+.lp-prompt {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-kumo-base);
+  box-shadow: inset 0 0 0 1px var(--color-kumo-line), 0 1px 2px rgb(0 0 0 / 0.05);
+  color: var(--text-color-kumo-default);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+  cursor: copy;
+  transition: background-color 0.15s, box-shadow 0.15s;
+  user-select: none;
+}
+
+.lp-prompt:hover {
+  background: var(--color-kumo-tint);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18), 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.lp-prompt:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.lp-prompt__logos {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+
+.lp-prompt__logos img {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.lp-prompt__label {
+  display: inline-grid;
+}
+
+.lp-prompt__label > * {
+  grid-area: 1 / 1;
+}
+
+.lp-prompt [data-label='copied'],
+.lp-prompt[data-copied] [data-label='copy'] {
+  visibility: hidden;
+}
+
+.lp-prompt[data-copied] [data-label='copied'] {
+  visibility: visible;
+}
+
+.lp-hero .lp-prompt-slot {
+  margin-top: 36px;
+}
+
+.lp-demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lp-hero__shot {
+  align-self: stretch;
+  margin: 72px -16px 0;
+  text-align: left;
+}
+
+/* The agents Braid names without setup, set as a quiet row of names. */
+.lp-agents {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  margin-top: 72px;
+}
+
+.lp-agents__label {
+  color: var(--l-fg-4);
+  font-size: 13px;
+}
+
+.lp-agents__list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 36px;
+  color: var(--l-fg-3);
+  font-size: 17px;
+  font-weight: 520;
+  letter-spacing: -0.015em;
+}
+
+.lp [id] {
+  scroll-margin-top: 96px;
+}
+
+/*
+ * Lines split for motion rise from behind masks that leave room for ascenders and descenders. The split
+ * headings hold their own margins, so the masks' negative margins cancel out and the height never changes.
+ */
+.lp-hero__title,
+.lp-say,
+.lp-close__say {
+  display: flow-root;
+}
+
+.lp-line-mask {
+  padding-block: 0.1em;
+  margin-block: -0.1em;
+}
+
+.lp-figure {
+  min-width: 0;
+  margin: 0;
+}
+
+/* The tour repository, as the app draws it, working. */
+/* The window keeps one size whatever it shows; longer files and views scroll inside it, so the page never moves. */
+.lp-shot {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 868px;
+  overflow: hidden;
+  border: 1px solid var(--l-line);
+  border-radius: 12px;
+  background: var(--l-1);
+  font-size: 13px;
+}
+
+/* The repository's header: its address, then its tabs. */
+.lp-shot__head {
+  border-bottom: 1px solid var(--l-line-2);
+}
+
+.lp-shot__repo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  color: var(--l-fg-2);
+}
+
+.lp-shot__repo b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-shot__slash {
+  color: var(--l-fg-4);
+}
+
+.lp-shot__public {
+  padding: 0 7px;
+  border: 1px solid var(--l-line);
+  border-radius: 999px;
+  color: var(--l-fg-3);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+/* What a figure is when it is not live: a recording, said once, as small as it can be read. */
+.lp-rec {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--l-fg-4);
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 14px;
+}
+
+.lp-rec svg {
+  width: 10px;
+  height: 10px;
+}
+
+a.lp-rec:hover {
+  color: var(--l-fg-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.lp-shot__repo .lp-rec {
+  margin-left: auto;
+}
+
+.lp-shot__tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-shot__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.lp-shot button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lp-shot :focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: -2px;
+}
+
+.lp-shot__tabs [role='tab'] {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 8px;
+  border-radius: 6px 6px 0 0;
+  color: var(--l-fg-2);
+  transition: color 0.15s, box-shadow 0.2s;
+}
+
+.lp-shot__tabs [role='tab']:hover {
+  color: var(--l-fg);
+}
+
+.lp-shot__tabs [aria-selected='true'] {
+  box-shadow: inset 0 -2px 0 var(--l-accent);
+  color: var(--l-fg);
+}
+
+.lp-shot__tabs svg,
+.lp-shot__tree svg {
+  flex: none;
+  color: var(--l-fg-3);
+}
+
+.lp-shot__count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.07);
+  color: var(--l-fg-3);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+/* Every view fills the window and scrolls inside it; Code lays out its tree beside the file. */
+.lp-shot__panel {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: rgb(255 255 255 / 0.14) transparent;
+  scrollbar-width: thin;
+}
+
+.lp-shot__panel:not([data-flush]) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 24px;
+}
+
+.lp-shot__panel[data-flush] {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.lp-shot__side {
+  min-height: 0;
+  padding: 14px 10px;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.lp-shot__branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  margin: 0 0 10px 4px;
+  padding: 0 9px;
+  border: 1px solid var(--l-line);
+  border-radius: 6px;
+  color: var(--l-fg-2);
+  font-size: 12px;
+}
+
+.lp-shot__branch svg {
+  color: var(--l-fg-3);
+}
+
+.lp-shot__tree button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--l-fg-2);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.lp-shot__tree button:hover {
+  background: rgb(255 255 255 / 0.035);
+  color: var(--l-fg);
+}
+
+.lp-shot__tree li[data-on] button {
+  background: rgb(255 255 255 / 0.055);
+  color: var(--l-fg);
+}
+
+.lp-shot__caret {
+  flex: none;
+  width: 11px;
+}
+
+.lp-shot__tree .lp-shot__folder {
+  color: #5f6f8f;
+}
+
+.lp-shot__main {
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr);
+  min-height: 0;
+  margin: 12px 12px 12px 0;
+  overflow: hidden;
+  border: 1px solid var(--l-line-2);
+  border-radius: 8px;
+  background: var(--l-bg);
+}
+
+.lp-shot__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--l-line-2);
+}
+
+.lp-shot__crumb {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--l-fg-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-shot__crumb b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+/* A phone has no room for the tree, so the file is picked from a list in the bar instead. */
+.lp-shot__pick {
+  display: none;
+}
+
+.lp-shot__seg {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 0.04);
+  font-size: 12px;
+}
+
+.lp-shot__seg button {
+  padding: 2px 10px;
+  border-radius: 5px;
+  color: var(--l-fg-3);
+}
+
+.lp-shot__seg button[data-on] {
+  background: rgb(255 255 255 / 0.09);
+  color: var(--l-fg);
+}
+
+/* The count keeps its left edge whatever file is open, so a new count never moves it. */
+.lp-shot__lines {
+  flex: none;
+  width: 56px;
+  color: var(--l-fg-4);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The file and its card: the file scrolls, and the card rides beside its run, clipped to the file's window. */
+.lp-shot__view {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lp-shot__body {
+  position: relative;
+  height: 100%;
+  padding: 6px 0;
+  overflow: auto;
+  scrollbar-color: rgb(255 255 255 / 0.14) transparent;
+  scrollbar-width: thin;
+}
+
+.lp-run {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  box-shadow: inset 2px 0 0 transparent, inset 0 1px 0 var(--l-line-2);
+  transition:
+    background-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.lp-run:first-child {
+  box-shadow: inset 2px 0 0 transparent;
+}
+
+.lp-run[data-on] {
+  background: rgb(255 255 255 / 0.03);
+  box-shadow: inset 2px 0 0 var(--l-accent), inset 0 1px 0 var(--l-line-2);
+}
+
+.lp-shot .lp-run__who {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 16px;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 21px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.lp-run__name {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-run__name[data-person] {
+  color: var(--l-fg-3);
+  font-weight: 400;
+}
+
+.lp-run__owner {
+  color: var(--l-fg-4);
+}
+
+.lp-run__code {
+  min-width: 0;
+  margin: 0;
+  padding: 3px 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 21px;
+}
+
+.lp-run__code li {
+  display: flex;
+  white-space: pre;
+}
+
+.lp-run__n {
+  flex: none;
+  width: 32px;
+  padding-right: 18px;
+  color: var(--l-fg-4);
+  text-align: right;
+  user-select: none;
+}
+
+.lp-run__code code {
+  overflow: hidden;
+  color: #c9ced6;
+}
+
+/* Code without blame: the authors' column folds away and the runs read as one file. */
+.lp-shot__view[data-mode='code'] .lp-run {
+  grid-template-columns: 0 minmax(0, 1fr);
+  background: none;
+  box-shadow: none;
+}
+
+.lp-shot__view[data-mode='code'] .lp-run__who,
+.lp-shot__view[data-mode='code'] .lp-card {
+  visibility: hidden;
+}
+
+.lp-shot__view[data-mode='code'] .lp-run__code {
+  padding: 0;
+}
+
+.lp-shot__view[data-mode='code'] .lp-run__n {
+  width: 48px;
+}
+
+.tk-kw {
+  color: #c4a1ff;
+}
+
+.tk-str {
+  color: #a6d9a0;
+}
+
+.tk-num {
+  color: #f0c38b;
+}
+
+.tk-type {
+  color: #8cc8ff;
+}
+
+.tk-fn {
+  color: #f2f3f5;
+}
+
+.tk-punct {
+  color: #7d828a;
+}
+
+.tk-comment {
+  color: var(--l-fg-4);
+}
+
+/* The open run's card, moved beside its run without moving anything else. */
+.lp-card {
+  position: absolute;
+  top: 0;
+  right: 24px;
+  width: 286px;
+  transform: translateY(calc(var(--card-y) - var(--scroll, 0px)));
+  transition: transform 0.35s var(--ease-out);
+}
+
+.lp-card__box {
+  padding: 14px 16px 16px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 12px;
+  background: var(--l-2);
+  box-shadow: 0 16px 40px -18px rgb(0 0 0 / 0.8);
+}
+
+/* Another run's card fades in where the last one was. */
+.lp-card__content {
+  animation: lp-card-in 0.3s var(--ease-out);
+}
+
+@keyframes lp-card-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.lp-card__kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--l-fg-3);
+  font-size: 12px;
+}
+
+.lp-card__kicker .mono {
+  color: var(--l-fg-4);
+}
+
+.lp-card__kicker svg {
+  flex: none;
+}
+
+.lp-card__merged {
+  color: #a78bfa;
+}
+
+/* Every card keeps one height: two lines of title and four rows of facts. */
+.lp-card__title {
+  min-height: 38px;
+  margin-top: 8px;
+  color: var(--l-fg);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 19px;
+}
+
+.lp-card__facts {
+  display: grid;
+  grid-template-rows: repeat(4, 19px);
+  gap: 7px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--l-line-2);
+  font-size: 12.5px;
+}
+
+.lp-card__owner {
+  grid-row: 2;
+}
+
+.lp-card__tool {
+  grid-row: 3;
+}
+
+.lp-card__confidence {
+  grid-row: 4;
+}
+
+/* A person's two facts sit at the top; the rows an agent's model and tool fill stay empty below. */
+.lp-card__facts[data-person] .lp-card__owner {
+  grid-row: 1;
+}
+
+.lp-card__facts[data-person] .lp-card__confidence {
+  grid-row: 2;
+}
+
+.lp-card__facts div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+
+.lp-card__facts dt {
+  color: var(--l-fg-4);
+}
+
+.lp-card__facts dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--l-fg-2);
+}
+
+.lp-card__ok {
+  color: #4cc38a;
+}
+
+/* An attribution Braid only inferred reads weaker than one it saw. */
+.lp-card__ok[data-weak] {
+  color: var(--l-fg-3);
+}
+
+/* A file or view on its way: grey lines where its rows will be. */
+.lp-skel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 18px 16px;
+}
+
+.lp-skel span {
+  height: 10px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.05);
+}
+
+/* ---------- The demo's other views, drawn as the app draws them ---------- */
+
+/* The merge queue: one merge group stepping through combining, checks and merging as the view opens, then its history. */
+.lp-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lp-queue .lp-pr__meta code {
+  color: var(--l-fg-2);
+}
+
+.lp-steps {
+  margin: 0;
+  padding: 2px 14px 6px;
+  border-top: 1px solid var(--l-line-2);
+  list-style: none;
+}
+
+.lp-steps li {
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 0;
+}
+
+.lp-steps li + li {
+  border-top: 1px solid var(--l-line-2);
+}
+
+.lp-steps b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-steps__icon {
+  display: inline-grid;
+}
+
+.lp-steps__icon > * {
+  grid-area: 1 / 1;
+}
+
+.lp-steps__wait {
+  color: var(--l-fg-4);
+  opacity: 0;
+}
+
+.lp-steps__done {
+  color: #4ade80;
+}
+
+.lp-steps__checks {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2 / -1;
+  gap: 6px;
+}
+
+.lp-shot .lp-steps__checks code {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border: 1px solid var(--l-line);
+  border-radius: 999px;
+  color: var(--l-fg-2);
+  font-size: 11.5px;
+}
+
+.lp-steps__checks svg {
+  color: #4ade80;
+}
+
+/*
+ * Each step waits until its time, then passes: only its icon changes, so every word keeps its contrast throughout.
+ * With reduced motion every step simply shows passed.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .lp-steps__wait {
+    animation: lp-step-wait 0.01s linear var(--at) backwards;
+  }
+
+  .lp-steps__done,
+  .lp-steps__checks svg {
+    animation: lp-step-done 0.35s var(--ease-out) var(--at) backwards;
+  }
+}
+
+@keyframes lp-step-wait {
+  from {
+    opacity: 1;
+  }
+}
+
+@keyframes lp-step-done {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.lp-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-history li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--l-line-2);
+  color: var(--l-fg-2);
+}
+
+.lp-history li:first-child {
+  border-top: 0;
+}
+
+.lp-history code {
+  color: var(--l-fg-3);
+}
+
+.lp-history__back {
+  color: #f87171;
+}
+
+
+.lp-shot__panel code,
+.lp-shot__panel pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lp-tone-pass {
+  color: #4ade80;
+}
+
+.lp-tone-merged {
+  color: #a78bfa;
+}
+
+.lp-tone-fail {
+  color: #f87171;
+}
+
+.lp-tone-warn {
+  color: #fbbf24;
+}
+
+.lp-tone-muted,
+.lp-muted {
+  color: var(--l-fg-4);
+}
+
+.lp-box {
+  flex: none;
+  border: 1px solid var(--l-line);
+  border-radius: 8px;
+  background: var(--l-1);
+}
+
+.lp-box__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--l-line-2);
+  color: var(--l-fg-2);
+}
+
+.lp-box__head:last-child {
+  border-bottom: 0;
+}
+
+.lp-box__head b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-box__head > code {
+  margin-left: auto;
+  color: var(--l-fg-3);
+}
+
+.lp-box__body {
+  padding: 12px 14px;
+  color: var(--l-fg-2);
+  line-height: 1.5;
+}
+
+.lp-by {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 4px;
+  color: var(--l-fg-3);
+}
+
+.lp-by b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-by code {
+  margin-left: 4px;
+  color: var(--l-fg-4);
+}
+
+.lp-diff {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.lp-diff__add {
+  color: #4ade80;
+}
+
+.lp-diff__del {
+  color: #f87171;
+}
+
+.lp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 450;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.lp-badge[data-tone='fail'] {
+  color: #f87171;
+}
+
+.lp-badge[data-tone='warn'] {
+  color: #fbbf24;
+}
+
+.lp-badge[data-tone='pass'] {
+  color: #4ade80;
+}
+
+/* Open and Closed, as the pull request list counts them. */
+.lp-states {
+  gap: 4px;
+  padding-block: 4px;
+}
+
+.lp-states button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--l-fg-3);
+}
+
+.lp-states button[aria-pressed='true'] {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-states button span {
+  color: var(--l-fg-4);
+  font-weight: 400;
+}
+
+.lp-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-rows li + li {
+  border-top: 1px solid var(--l-line-2);
+}
+
+.lp-shot .lp-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  text-align: left;
+}
+
+.lp-row:hover {
+  background: rgb(255 255 255 / 0.025);
+}
+
+.lp-row > svg {
+  margin-top: 2px;
+}
+
+.lp-row__main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lp-row__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--l-fg);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.lp-row__meta {
+  color: var(--l-fg-4);
+  font-size: 12px;
+}
+
+.lp-row__meta .lp-by,
+.lp-row__meta .lp-by b {
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* One pull request: back to the list, its title, its state and who made it, then its tabs. */
+.lp-shot .lp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: start;
+  padding: 2px 0;
+  color: var(--l-fg-3);
+  font-size: 12.5px;
+}
+
+.lp-back:hover {
+  color: var(--l-fg);
+}
+
+.lp-pr,
+.lp-task,
+.lp-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lp-pr__title,
+.lp-task__title,
+.lp-rules__title {
+  color: var(--l-fg);
+  font-size: 19px;
+  font-weight: 520;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.lp-pr__title span {
+  color: var(--l-fg-4);
+  font-weight: 400;
+}
+
+.lp-task__title .lp-back {
+  display: inline;
+  color: var(--l-fg-3);
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.lp-task__title > span[aria-hidden] {
+  color: var(--l-fg-4);
+}
+
+.lp-rules__title code {
+  margin-left: 8px;
+  color: var(--l-fg-3);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.lp-pr__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.lp-pr__meta .lp-diff {
+  margin-left: auto;
+}
+
+.lp-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #238636;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 24px;
+}
+
+.lp-state[data-state='merged'] {
+  background: #8250df;
+}
+
+.lp-state[data-state='closed'] {
+  background: #5a5f66;
+}
+
+.lp-subtabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--l-line-2);
+}
+
+.lp-shot .lp-subtabs [role='tab'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  color: var(--l-fg-3);
+}
+
+.lp-subtabs [aria-selected='true'] {
+  box-shadow: inset 0 -2px 0 var(--l-accent);
+  color: var(--l-fg) !important;
+}
+
+.lp-pr__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Proof: the agent's screenshots side by side, then each command, its time and where it ran. */
+.lp-proofs {
+  display: grid;
+  grid-template-columns: minmax(0, 3.4fr) minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--l-line-2);
+}
+
+.lp-proofs__page {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  color: var(--l-fg-4);
+  font-size: 12px;
+}
+
+.lp-proofs__page code {
+  color: var(--l-fg-2);
+}
+
+.lp-proofs__shot {
+  min-width: 0;
+  margin: 0;
+}
+
+.lp-proofs__shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--l-line);
+  border-radius: 6px;
+  background: var(--l-2);
+}
+
+.lp-proofs__shot figcaption {
+  margin-top: 6px;
+  color: var(--l-fg-4);
+  font-size: 11.5px;
+}
+
+.lp-commands,
+.lp-checks ul,
+.lp-settings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-commands li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto 104px;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-top: 1px solid var(--l-line-2);
+}
+
+.lp-commands li:first-child {
+  border-top: 0;
+}
+
+.lp-commands code {
+  color: var(--l-fg);
+}
+
+.lp-commands__time,
+.lp-commands__where {
+  color: var(--l-fg-4);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* What happened, as the conversation lists it between the boxes. */
+.lp-timeline {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0 0 0 6px;
+  list-style: none;
+}
+
+.lp-timeline li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  color: var(--l-fg-3);
+  font-size: 12.5px;
+}
+
+.lp-timeline svg {
+  flex: none;
+  box-sizing: content-box;
+  padding: 5px;
+  border: 1px solid var(--l-line);
+  border-radius: 999px;
+  background: var(--l-2);
+  color: var(--l-fg-3);
+}
+
+.lp-timeline [data-type='landed'] svg {
+  color: #a78bfa;
+}
+
+.lp-timeline [data-type='checks'] svg,
+.lp-timeline [data-type='conflict'] svg,
+.lp-timeline [data-type='closed'] svg {
+  color: #f87171;
+}
+
+.lp-timeline [data-type='escalated'] svg {
+  color: #fbbf24;
+}
+
+.lp-tag {
+  color: var(--l-fg-4);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.lp-verdict {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.07);
+  color: var(--l-fg-2);
+  font-size: 11.5px;
+  line-height: 20px;
+}
+
+.lp-verdict[data-verdict='approve'] {
+  background: rgb(74 222 128 / 0.12);
+  color: #4ade80;
+}
+
+.lp-verdict[data-verdict='escalate'] {
+  background: rgb(251 191 36 / 0.12);
+  color: #fbbf24;
+}
+
+/* Where the conversation ends: merged, closed, or the question a person answers. */
+.lp-merge {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--l-line);
+  border-radius: 8px;
+  background: var(--l-1);
+  color: var(--l-fg-2);
+}
+
+p.lp-merge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lp-merge[data-state='merged'] {
+  border-color: rgb(167 139 250 / 0.4);
+}
+
+.lp-merge[data-state='merged'] svg {
+  color: #a78bfa;
+}
+
+.lp-merge[data-state='attention'] {
+  border-color: rgb(251 191 36 / 0.4);
+}
+
+.lp-merge[data-state='attention'] .lp-merge__head svg {
+  color: #fbbf24;
+}
+
+.lp-merge[data-state='revise'] .lp-merge__head svg {
+  color: #f87171;
+}
+
+.lp-merge code {
+  color: var(--l-fg);
+}
+
+.lp-merge__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lp-merge__head b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-merge__detail {
+  color: var(--l-fg-2);
+  line-height: 1.5;
+}
+
+.lp-merge__answers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lp-shot .lp-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--l-line);
+  border-radius: 7px;
+  background: var(--l-2);
+  color: var(--l-fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.lp-shot .lp-button:hover {
+  border-color: rgb(255 255 255 / 0.18);
+}
+
+.lp-shot .lp-button[data-primary] {
+  border-color: transparent;
+  background: var(--l-fg);
+  color: var(--l-bg);
+}
+
+.lp-empty {
+  padding: 24px 4px;
+  color: var(--l-fg-3);
+}
+
+/* Checks, grouped by where they ran, one state icon each. */
+.lp-checks__group {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--l-line-2);
+  background: rgb(255 255 255 / 0.02);
+  color: var(--l-fg-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lp-checks + .lp-checks .lp-checks__group {
+  border-top: 1px solid var(--l-line-2);
+}
+
+.lp-checks li {
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--l-line-2);
+}
+
+.lp-checks li:first-child {
+  border-top: 0;
+}
+
+.lp-checks code {
+  color: var(--l-fg);
+}
+
+.lp-checks__detail {
+  color: var(--l-fg-3);
+  font-size: 12px;
+}
+
+.lp-checks__state {
+  font-size: 12px;
+}
+
+.lp-checks__state[data-status='passed'] {
+  color: #4ade80;
+}
+
+.lp-checks__state[data-status='failed'] {
+  color: #f87171;
+}
+
+/* The fleet, as Agents lists it. */
+.lp-fleet,
+.lp-rulesets {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.lp-fleet th,
+.lp-fleet td,
+.lp-rulesets th,
+.lp-rulesets td {
+  padding: 10px 14px;
+  border-top: 1px solid var(--l-line-2);
+  text-align: right;
+  vertical-align: top;
+}
+
+.lp-fleet thead th,
+.lp-rulesets thead th {
+  border-top: 0;
+  color: var(--l-fg-4);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.lp-fleet tbody th,
+.lp-fleet thead th:first-child,
+.lp-rulesets th,
+.lp-rulesets td {
+  text-align: left;
+}
+
+.lp-fleet tbody th {
+  font-weight: 400;
+}
+
+.lp-fleet td {
+  color: var(--l-fg-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-fleet__alive {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lp-fleet__bar {
+  width: 64px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.08);
+}
+
+.lp-fleet__bar span {
+  display: block;
+  height: 100%;
+  background: var(--l-fg-3);
+}
+
+/* The task's agent graph: three lanes from one commit, where two wrote the same file. */
+.lp-graph {
+  margin: 0;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--l-line);
+  border-radius: 8px;
+  background: var(--l-1);
+  font-size: 12.5px;
+}
+
+.lp-graph__ends {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgb(255 255 255 / 0.14);
+  color: var(--l-fg-3);
+  font-size: 12px;
+}
+
+.lp-graph__lanes {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  padding: 18px 0 2px 14px;
+  border-left: 1px solid rgb(255 255 255 / 0.18);
+}
+
+.lp-graph__lane {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lp-graph__lane::before {
+  position: absolute;
+  top: 50%;
+  left: -14px;
+  width: 10px;
+  border-top: 1px solid rgb(255 255 255 / 0.18);
+  content: '';
+}
+
+.lp-graph__who {
+  flex: none;
+  color: var(--l-fg-4);
+}
+
+.lp-graph__who b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-graph__line {
+  flex: 1;
+  min-width: 24px;
+  border-top: 1px solid rgb(255 255 255 / 0.22);
+}
+
+.lp-graph__lane code {
+  color: var(--l-fg-3);
+}
+
+.lp-graph__lane[data-chosen] .lp-graph__line {
+  border-top-color: #a78bfa;
+}
+
+.lp-graph__lane[data-dropped] .lp-graph__who b {
+  color: var(--l-fg-3);
+  font-weight: 400;
+}
+
+.lp-graph__lane[data-dropped] .lp-graph__line {
+  border-top-style: dashed;
+}
+
+/* Where two lanes wrote the same file: identical, or two versions a person chooses between. */
+.lp-graph__mark {
+  position: absolute;
+  top: 37px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  background: var(--l-1);
+  color: var(--l-fg-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lp-graph__mark i {
+  font-style: normal;
+}
+
+.lp-graph__mark[data-kind='same'] {
+  left: 48%;
+}
+
+.lp-graph__mark[data-kind='versions'],
+.lp-graph__mark[data-kind='chosen'] {
+  left: 68%;
+}
+
+.lp-graph__mark[data-kind='versions'] {
+  color: #fbbf24;
+}
+
+.lp-graph__mark[data-kind='chosen'] {
+  color: #a78bfa;
+}
+
+.lp-task__intent {
+  color: var(--l-fg-2);
+  line-height: 1.5;
+}
+
+.lp-choose__cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 14px 4px;
+}
+
+.lp-version {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--l-line);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.lp-version[data-chosen] {
+  border-color: rgb(167 139 250 / 0.6);
+}
+
+.lp-version__who {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.lp-version__who b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-version__summary {
+  color: var(--l-fg-3);
+  line-height: 1.5;
+}
+
+.lp-shot .lp-link {
+  margin: 4px 14px 12px;
+  padding: 4px 0;
+  color: var(--l-fg-2);
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-decoration-color: var(--l-fg-4);
+  text-underline-offset: 3px;
+}
+
+.lp-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.lp-compare figure {
+  min-width: 0;
+  margin: 0;
+}
+
+.lp-compare figcaption {
+  margin-bottom: 6px;
+  color: var(--l-fg-3);
+  font-size: 12px;
+}
+
+.lp-compare pre {
+  max-height: 280px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--l-line-2);
+  border-radius: 6px;
+  background: var(--l-bg);
+  color: #c9ced6;
+  line-height: 1.6;
+}
+
+/* The rules, as Settings › Rules lays them out. */
+.lp-rulesets td code {
+  display: inline-block;
+  margin: 0 6px 6px 0;
+  padding: 0 6px;
+  border: 1px solid var(--l-line);
+  border-radius: 4px;
+  color: var(--l-fg-2);
+  line-height: 20px;
+}
+
+.lp-rulesets td:first-child {
+  width: 60%;
+}
+
+.lp-rulesets td {
+  color: var(--l-fg-2);
+}
+
+.lp-rulesets [data-decides='human'] {
+  color: #fbbf24;
+}
+
+.lp-rulesets [data-decides='auto'] {
+  color: #4ade80;
+}
+
+.lp-rulesets__note {
+  display: block;
+  margin-top: 4px;
+  color: var(--l-fg-4);
+  font-size: 12px;
+}
+
+.lp-setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--l-line-2);
+  color: var(--l-fg-2);
+  line-height: 1.45;
+}
+
+.lp-setting:first-child {
+  border-top: 0;
+}
+
+.lp-setting__value {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--l-fg-3);
+}
+
+.lp-setting__value code {
+  padding: 0 6px;
+  border: 1px solid var(--l-line);
+  border-radius: 4px;
+  color: var(--l-fg-2);
+  line-height: 20px;
+}
+
+/* ---------- Sections: one line and one picture ---------- */
+
+.lp-sec {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  align-items: center;
+  gap: 48px 64px;
+  padding-top: 192px;
+}
+
+
+.lp-sec--wide {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 48px;
+}
+
+/* Every section's line in one size, so the page keeps one rhythm. */
+.lp-say {
+  max-width: 21em;
+  color: var(--l-fg);
+  font-size: clamp(26px, 2.7vw, 34px);
+  font-weight: 520;
+  line-height: 1.16;
+  letter-spacing: -0.024em;
+  text-wrap: balance;
+}
+
+.lp-sec--wide .lp-say {
+  max-width: 27em;
+}
+
+/* The merge queue as a braid, under the section's line. */
+.lp-queue__pin {
+  display: grid;
+  gap: 44px;
+}
+
+.lp-weave-figure {
+  position: relative;
+}
+
+.lp-weave-figure > .lp-rec {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.lp-weave svg {
+  display: block;
+  overflow: visible;
+}
+
+/* Labels sit on a halo of the page's colour, so a strand behind them never cuts through a word. */
+.lp-weave text {
+  paint-order: stroke;
+  stroke: var(--l-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.lp-weave__who {
+  fill: var(--l-fg-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lp-weave__agent {
+  fill: var(--l-bg);
+  stroke: var(--l-fg-3);
+  stroke-width: 1.25;
+}
+
+/* Each strand rides on a gap of the page's colour, so where two cross the later one passes over. */
+.lp-weave__gap {
+  fill: none;
+  stroke: var(--l-bg);
+  stroke-width: 7;
+}
+
+.lp-weave__strand,
+.lp-weave__peel {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.42);
+  stroke-width: 1.5;
+}
+
+.lp-weave__peel {
+  stroke: #f07a7a;
+}
+
+.lp-weave__failed {
+  fill: #f07a7a;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.lp-weave__main {
+  fill: none;
+  stroke: var(--l-fg);
+  stroke-width: 2;
+}
+
+.lp-weave__commit {
+  fill: #a78bfa;
+  stroke: var(--l-bg);
+  stroke-width: 2;
+}
+
+.lp-weave__head {
+  fill: var(--l-fg-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lp-weave__knot {
+  fill: var(--l-bg);
+  stroke: rgb(255 255 255 / 0.5);
+  stroke-width: 1.5;
+}
+
+/* A check sweeping around the knot, green when it passes and red when it fails; only the motion shows it. */
+.lp-weave__check {
+  fill: none;
+  stroke: #4ade80;
+  stroke-width: 2;
+  visibility: hidden;
+}
+
+.lp-weave__check[data-failed] {
+  stroke: #f07a7a;
+}
+
+.lp-weave__queue {
+  fill: var(--l-fg-4);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* A hundred scripted agents: one cell each, lit when its change merged. */
+.lp-scale {
+  margin: 0;
+}
+
+.lp-scale__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--l-fg-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.lp-scale__row {
+  display: grid;
+  grid-template-columns: 84px 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  color: var(--l-fg-3);
+  font-size: 12.5px;
+}
+
+.lp-scale__n {
+  color: var(--l-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-scale__n b {
+  display: inline-block;
+  min-width: 2.4ch;
+  color: var(--l-fg);
+  font-weight: 500;
+  text-align: right;
+}
+
+.lp-scale__row--git .lp-scale__n {
+  color: var(--l-fg-3);
+}
+
+.lp-scale__cells {
+  display: grid;
+  grid-template-columns: repeat(100, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.lp-scale__cells > span {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.07);
+}
+
+.lp-scale__cells i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--l-fg-2);
+}
+
+.lp-scale__row--git .lp-scale__cells i {
+  background: rgb(255 255 255 / 0.32);
+}
+
+/* ---------- The ways in ---------- */
+
+.lp-ways {
+  padding-top: 192px;
+}
+
+.lp-ways__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 48px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-way {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 22px 24px;
+  border: 1px solid var(--l-line);
+  border-radius: 12px;
+  background: var(--l-1);
+}
+
+.lp-way__name {
+  color: var(--l-fg);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.lp-way__code {
+  display: block;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--l-line-2);
+  border-radius: 8px;
+  background: var(--l-bg);
+  color: var(--l-fg-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lp-way__cmd {
+  display: block;
+  line-height: 20px;
+}
+
+/* The rest of what Braid does, one line each under the ways in. */
+.lp-ways__more {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 48px;
+  margin: 36px 0 0;
+  padding: 0;
+  color: var(--l-fg-3);
+  font-size: 15px;
+  line-height: 1.5;
+  list-style: none;
+}
+
+.lp-ways__more code {
+  color: var(--l-fg-2);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+}
+
+.lp-ways__more a {
+  color: var(--l-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--l-fg-4);
+  text-underline-offset: 3px;
+}
+
+.lp-ways__more a:hover {
+  text-decoration-color: var(--l-fg);
+}
+
+/* ---------- The way in: the tour's agents drawn into one main, over what to do first ---------- */
+
+.lp-close {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  padding: 168px 0 160px;
+  text-align: center;
+}
+
+.lp-close__braid {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: -12px;
+  overflow: visible;
+}
+
+.lp-close__who {
+  fill: var(--l-fg-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lp-close__strand,
+.lp-close__main {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.4);
+  stroke-width: 1.25;
+}
+
+/* The simulated fleet is one fine bundle under its label, quieter than the agents and the person. */
+.lp-close__strand[data-simulated] {
+  stroke: rgb(255 255 255 / 0.13);
+  stroke-width: 0.75;
+}
+
+.lp-close__main {
+  stroke: rgb(255 255 255 / 0.6);
+  stroke-width: 1.75;
+}
+
+.lp-close__dot {
+  fill: var(--l-fg);
+}
+
+.lp-close__say {
+  max-width: 16em;
+  color: var(--l-fg);
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 520;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.lp-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 32px;
+  padding: 28px 0 40px;
+  border-top: 1px solid var(--l-line-2);
+  color: var(--l-fg-4);
+  font-size: 13px;
+}
+
+.lp-foot__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+}
+
+.lp-foot__links a {
+  color: var(--l-fg-3);
+  transition: color 0.15s;
+}
+
+.lp-foot__links a:hover {
+  color: var(--l-fg);
+}
+
+.lp-foot__note {
+  margin-left: auto;
+}
+
+/* ---------- The moments drawn large: a terminal, a pull request's proof, and work held for a person ---------- */
+
+.lp-term {
+  overflow: hidden;
+  border: 1px solid var(--l-line);
+  border-radius: 12px;
+  background: var(--l-1);
+}
+
+.lp-term__bar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--l-line-2);
+  color: var(--l-fg-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lp-term__body {
+  margin: 0;
+  padding: 18px 20px 22px;
+  overflow-x: auto;
+  color: var(--l-fg-3);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 22px;
+  white-space: pre;
+  scrollbar-width: none;
+}
+
+.lp-term__prompt,
+.lp-term__head,
+.lp-term__n,
+.lp-term__age {
+  color: var(--l-fg-4);
+}
+
+.lp-term__cmd,
+.lp-term__who {
+  color: var(--l-fg);
+}
+
+.lp-term__row[data-person] .lp-term__who,
+.lp-term__owner {
+  color: var(--l-fg-3);
+}
+
+.lp-term__code {
+  color: var(--l-fg-2);
+}
+
+/*
+ * The drawn scenes: a bounded stage centred on the page, so its main sits on the line the background draws down the
+ * page's centre. Strands and nodes are drawn in SVG; words, panes and frames sit over them, never on a line.
+ */
+.lp-stage-wrap {
+  margin: 0;
+}
+
+.lp-stage-measure {
+  display: flex;
+  justify-content: center;
+}
+
+.lp-stage {
+  position: relative;
+  flex: none;
+}
+
+.lp-stage > * {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+}
+
+.lp-stage > .lp-stage__art {
+  top: 0;
+  left: 0;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.lp-stage > .lp-rec {
+  top: 0;
+  right: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.lp-stage__strand {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.lp-stage__ring {
+  fill: var(--l-bg);
+  stroke-width: 1.5;
+}
+
+.lp-stage__agent {
+  color: var(--l-fg-3);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.lp-stage__agent b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-stage__agent[data-align='right'] {
+  text-align: right;
+}
+
+/* The file, a small pill sitting on the knot the strands make. */
+.lp-stage__pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 999px;
+  background: #0b0c0e;
+}
+
+.lp-stage__pill code {
+  color: var(--l-fg-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* One line of code in a small editor pane: its agent, the line's number, then the line, never wrapped. */
+.lp-pane {
+  height: 86px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 10px;
+  background: #0e0f12;
+  transition: border-color 0.6s var(--ease-out);
+}
+
+.lp-pane__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  color: var(--l-fg-4);
+  font-size: 12.5px;
+}
+
+.lp-pane__head b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-pane__head > span:last-child {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lp-pane__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.lp-pane__body {
+  display: flex;
+  align-items: center;
+  height: 50px;
+  padding-right: 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.lp-pane__gutter {
+  flex: none;
+  width: 32px;
+  color: #4ade80;
+  text-align: center;
+}
+
+/* A line longer than its pane fades out at the edge instead of wrapping. */
+.lp-pane__body code {
+  min-width: 0;
+  overflow: hidden;
+  color: #c9ced6;
+  mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent);
+}
+
+.lp-pane *,
+.lp-pane__dot {
+  transition:
+    color 0.6s var(--ease-out),
+    opacity 0.6s var(--ease-out);
+}
+
+/* The version not chosen: its words go grey and its tint fades, every word still legible. */
+.lp-pane[data-dim='1'] {
+  border-color: rgb(255 255 255 / 0.06);
+}
+
+.lp-pane[data-dim='1'] .lp-pane__head b,
+.lp-pane[data-dim='1'] .lp-pane__gutter,
+.lp-pane[data-dim='1'] code,
+.lp-pane[data-dim='1'] code span {
+  color: var(--l-fg-4);
+}
+
+.lp-pane[data-dim='1'] .lp-pane__dot {
+  opacity: 0.4;
+}
+
+.lp-stage [data-strand='b1'],
+.lp-stage [data-strand='b2'] {
+  opacity: 0.3;
+}
+
+.lp-stage [data-node='other'] {
+  opacity: 0.6;
+}
+
+.lp-overlap__chosen {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--l-fg-3);
+  font-size: 13.5px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.lp-overlap__chosen svg {
+  flex: none;
+  color: #a78bfa;
+}
+
+.lp-overlap__chosen b {
+  margin-right: -2px;
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-overlap__main,
+.lp-proof__main {
+  color: var(--l-fg-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.lp-proof__main span {
+  margin-left: 6px;
+  color: var(--l-fg-4);
+}
+
+/* #23's screenshots in thin frames: a browser with its three dots, and a phone over its lower-right corner. */
+.lp-device {
+  overflow: hidden;
+  background: #0d1117;
+}
+
+.lp-device img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lp-device--desktop {
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 10px;
+}
+
+.lp-device__bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  background: #111318;
+}
+
+.lp-device__bar i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.16);
+}
+
+.lp-device__bar span {
+  position: absolute;
+  left: 50%;
+  color: var(--l-fg-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+
+.lp-device--phone {
+  padding: 16px 6px 8px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 22px;
+  background: #0b0c0f;
+  box-shadow: 0 20px 40px -18px rgb(0 0 0 / 0.9);
+}
+
+.lp-device--phone img {
+  border-radius: 14px;
+}
+
+.lp-device__notch {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.14);
+  transform: translateX(-50%);
+}
+
+.lp-proof__head {
+  color: var(--l-fg-3);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.lp-proof__head b {
+  color: var(--l-fg);
+  font-weight: 500;
+}
+
+.lp-proof__head b span {
+  color: var(--l-fg-4);
+  font-weight: 400;
+}
+
+.lp-proof__by {
+  display: block;
+}
+
+.lp-proof__run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 132px;
+  align-items: center;
+  gap: 16px;
+  height: 20px;
+}
+
+.lp-proof__run code {
+  color: var(--l-fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.lp-proof__time,
+.lp-proof__where {
+  color: var(--l-fg-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-proof__time {
+  text-align: right;
+}
+
+.lp-proof__run[data-where='agent'] .lp-proof__where {
+  color: var(--l-fg-4);
+}
+
+.lp-check__wait {
+  fill: none;
+  stroke: var(--l-fg-4);
+  stroke-width: 1.5;
+  opacity: 0;
+}
+
+.lp-check__done circle {
+  fill: var(--l-bg);
+  stroke-width: 1.5;
+}
+
+.lp-check__done path {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Narrower screens ---------- */
+
+
+
+@media (max-width: 640px) {
+  /* The places to look move to the footer; the brand and the ways in stay. */
+  .landing .site-head__bar {
+    display: flex;
+    padding-block: 0;
+  }
+
+  .landing .site-head__nav,
+  .landing .site-head .brand__name {
+    display: none;
+  }
+
+  /* Sized to its two links, so the capsule can gather them beside the mark. */
+  .landing .site-head__actions {
+    flex: none;
+    margin-left: auto;
+  }
+
+  .lp-agents__list {
+    gap: 10px 22px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .lp-shot {
+    height: 760px;
+  }
+
+  .lp-shot__panel[data-flush] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-shot__side,
+  .lp-shot__crumb {
+    display: none;
+  }
+
+  .lp-shot__main {
+    margin: 8px;
+  }
+
+  .lp-shot__pick {
+    display: block;
+    min-width: 0;
+    max-width: 52%;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--l-line);
+    border-radius: 6px;
+    background: var(--l-2);
+    color: var(--l-fg);
+    font: inherit;
+    font-size: 12.5px;
+  }
+
+  .lp-sec {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+
+  .lp-scale__cells {
+    grid-template-columns: repeat(50, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .lp-run {
+    grid-template-columns: 140px minmax(0, 1fr);
+  }
+
+  .lp-run__owner {
+    display: none;
+  }
+
+  /* A phone keeps a fixed window: the file scrolls inside it and the card has its own row below. */
+  .lp-shot {
+    height: 640px;
+  }
+
+  .lp-shot__main {
+    margin-bottom: 0;
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .lp-shot__view {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) 218px;
+  }
+
+  .lp-card {
+    position: static;
+    width: auto;
+    transform: none;
+  }
+
+  .lp-card__box {
+    height: 100%;
+    padding: 12px;
+    border-width: 1px 0 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .lp-shot__view[data-mode='code'] {
+    grid-template-rows: minmax(0, 1fr) 0;
+  }
+
+  .lp-shot__panel:not([data-flush]) {
+    padding: 12px 10px 20px;
+  }
+
+  .lp-fleet [data-wide] {
+    display: none;
+  }
+
+  .lp-proofs {
+    grid-template-columns: minmax(0, 2.6fr) minmax(0, 1fr);
+  }
+
+  .lp-commands li {
+    grid-template-columns: 16px minmax(0, 1fr) auto auto;
+  }
+
+  .lp-checks li {
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+  }
+
+  .lp-checks__detail {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+
+  .lp-choose__cards,
+  .lp-compare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-graph__lane {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .lp-graph__who {
+    flex-basis: 100%;
+  }
+
+  .lp-graph__mark {
+    position: static;
+    justify-self: start;
+    padding: 0;
+  }
+
+  .lp-card__kicker .mono { margin-left: auto; }
+  .lp-card__facts { gap: 5px; margin-top: 8px; padding-top: 8px; }
+  .lp-card__facts div { grid-template-columns: 76px minmax(0, 1fr); }
+
+  .lp-ways__grid,
+  .lp-ways__more {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lp-stage__agent {
+    font-size: 13px;
+  }
+
+  .lp-proof__head {
+    font-size: 13px;
+    line-height: 20px;
+  }
+
+  .lp-proof__run {
+    grid-template-columns: minmax(0, 1fr) 44px 104px;
+    gap: 10px;
+  }
+
+  .lp-proof__run code,
+  .lp-proof__time,
+  .lp-proof__where,
+  .lp-pane__body {
+    font-size: 12px;
+  }
+
+  /* On a phone each queue's count sits above its cells, 25 to a row. */
+  .lp-scale__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+
+  .lp-scale__cells {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(25, minmax(0, 1fr));
+  }
+
+  .lp-foot__note {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .lp-hero {
+    padding-top: 56px;
+  }
+
+  .lp-hero__shot {
+    margin: 48px 0 0;
+  }
+
+  .lp-shot__tabs svg,
+  .lp-shot__tabs .lp-shot__count {
+    display: none;
+  }
+
+  .lp-shot__tabs {
+    padding: 0 4px;
+  }
+
+  .lp-run {
+    grid-template-columns: 108px minmax(0, 1fr);
+  }
+
+  .lp-shot .lp-run__who {
+    padding-inline: 10px;
+  }
+
+  .lp-run__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .lp-run__n {
+    width: 24px;
+    padding-right: 10px;
+  }
+
+  .lp-sec,
+  .lp-ways {
+    padding-top: 120px;
+  }
+
+  .lp-close__who {
+    display: none;
+  }
+
+  .lp-close__braid {
+    height: 220px;
+  }
+
+  /* Where each check ran stays beside it on a phone; the columns only tighten. */
+
+  .lp-close {
+    padding: 136px 0 112px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-run,
+  .lp-card,
+  .landing .site-head__bar > *,
+  .landing .site-head__bar::before {
+    transition: none;
+  }
+
+  .lp-card__content {
+    animation: none;
+  }
+}

@@ -1,0 +1,243 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 50;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  transform: translateY(-160%);
+  transition: transform 0.15s var(--ease-out);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* ---------- Repository header: brand and name on one row, the repository's tabs below, as on GitHub ---------- */
+
+.brand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--fg);
+}
+
+.brand:hover {
+  color: var(--fg-2);
+}
+
+.repo-head__tabs {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 calc(var(--page-x) - 8px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.repo-head__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.repo-tabs__list {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.repo-tab {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  padding: 0 2px;
+  font-size: 14px;
+}
+
+.repo-tab__label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--fg);
+  transition: background-color 0.15s;
+}
+
+.repo-tab:hover .repo-tab__label {
+  background: var(--hover);
+}
+
+.repo-tab__icon {
+  flex: none;
+  color: var(--fg-3);
+}
+
+.repo-tab__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--selected);
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-notice {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 12px var(--page-x) 0;
+}
+
+.app-notice--example {
+  padding-top: 10px;
+}
+
+.main {
+  flex: 1;
+  outline: none;
+}
+
+.ended-session {
+  display: flex;
+  justify-content: center;
+  margin-top: -32px;
+}
+
+/* ---------- Pages ---------- */
+
+.page {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 20px var(--page-x) 96px;
+}
+
+.page--readable {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.page--readable > * {
+  max-width: 960px;
+}
+
+.page--readable > .page-head {
+  margin-bottom: 0;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 30px;
+  letter-spacing: -0.02em;
+}
+
+.page-subline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 4px;
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+.notice {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 560px) {
+  .example-action {
+    display: none;
+  }
+
+  .repo-tabs__list {
+    min-height: 42px;
+  }
+
+  /* All four tabs fit a phone without scrolling. */
+  .repo-tab__icon {
+    display: none;
+  }
+
+  .repo-tab__label {
+    padding: 6px;
+  }
+
+  .page-head {
+    flex-direction: column;
+  }
+}
+
+.repo-tab[aria-current='page'] { border-bottom-color: var(--focus); }
+@media (max-width: 560px) { .repo-tab__label { gap: 4px; padding-inline: 4px; } .repo-tab__count { min-width: 18px; padding: 0 3px; } }
+
+/* The global header frame renders with the URL, before account controls load. */
+.global-head { border-bottom: 1px solid var(--line); background: var(--panel); }
+.global-head__bar { display: flex; align-items: center; gap: 16px; min-height: 64px; max-width: var(--page-max); margin: 0 auto; padding: 0 var(--page-x); }
+.global-head__context { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.global-head__identity { position: relative; min-width: 0; }
+.mirror-source { position: absolute; top: 100%; left: 0; width: max-content; max-width: calc(100vw - 156px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 16px; color: var(--fg-3); }
+.mirror-source:hover { text-decoration: underline; }
+.repo-tabs__claim { display: flex; align-items: center; margin-left: auto; padding-inline: 8px; }
+.mirror-error { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100svh - 140px); padding-block: 48px; }
+.mirror-error .state { width: 100%; max-width: 620px; padding: 0; }
+.mirror-error h1 { overflow-wrap: anywhere; }
+.mirror-error__field { width: 100%; max-width: 360px; height: 100px; margin-top: 40px; }
+.global-head__owner, .global-head__repo, .global-head__page { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.global-head__owner { color: var(--fg-2); }
+.global-head__repo, .global-head__page { font-weight: 600; }
+.global-head__context a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.global-head__slash { flex: none; color: var(--fg-4); }
+.global-head__details { display: flex; align-items: center; gap: 8px; }
+.global-head__actions { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
+.global-head__account-placeholder { display: flex; justify-content: flex-end; width: 160px; }
+.global-head__links { display: flex; align-items: center; gap: 16px; margin-right: 4px; font-size: 14px; white-space: nowrap; color: var(--fg-2); }
+.global-head__links a:hover { color: var(--fg); }
+.global-head__search { color: var(--fg-2); gap: 8px; height: 32px; }
+.global-head__search .kbd { margin-left: 24px; }
+@media (max-width: 900px) {
+  .global-head__search-label, .global-head__search .kbd { display: none; }
+  .global-head__search { justify-content: center; width: 32px; padding: 0; }
+}
+@media (max-width: 560px) {
+  .global-head__bar { min-height: 56px; gap: 12px; }
+  .global-head__identity { flex: 1 1 auto; }
+  .mirror-source { max-width: calc(100vw - 2 * var(--page-x) - 36px); }
+  .global-head__context { flex: 1 1 auto; gap: 4px; }
+  /* Both read: the owner keeps its width up to 42%, the repository takes the rest and keeps its end. */
+  .global-head__owner { flex: none; max-width: 42%; }
+  .global-head__repo { direction: rtl; text-align: left; }
+  .global-head__details { display: none; }
+  .global-head__actions { gap: 6px; }
+  .global-head__account-placeholder { width: 98px; }
+  /* A visitor's phone keeps the context and Sign in; Explore and Example wait for the wider header. */
+  .global-head__links { display: none; }
+}

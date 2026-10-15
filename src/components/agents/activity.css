@@ -1,0 +1,19 @@
+.local-activity { min-width: 0; height: 190px; box-sizing: border-box; display: flex; flex-direction: column; }
+.local-activity .list__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.local-activity__source { color: var(--fg-3); font-size: 11px; }
+.local-activity__viewport { height: 144px; overflow: auto; overflow-anchor: none; scrollbar-gutter: stable; flex: 1; min-height: 0; }
+.local-activity__rows { margin: 0; padding: 0; list-style: none; }
+.local-activity__row { padding: 12px 16px; height: 72px; box-sizing: border-box; border-bottom: 1px solid var(--line); min-width: 0; }
+.local-activity__identity { display: flex; align-items: baseline; gap: 6px; height: 22px; font-size: 13px; white-space: nowrap; overflow: hidden; }
+.local-activity__identity strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.local-activity__identity > span { color: var(--fg-3); }
+.local-activity__line { display: flex; align-items: baseline; gap: 12px; height: 22px; font-size: 12px; }
+.local-activity__summary { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.local-activity__line time { flex: none; margin-left: auto; color: var(--fg-3); font-size: 11px; }
+.local-activity__notice { margin: 0; padding: 14px 16px; color: var(--fg-3); font-size: 12px; }
+.hosted-activity-event { min-width: 0; min-height: 24px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; overflow-wrap: anywhere; }
+.hosted-activity-event time { margin-left: 8px; color: var(--fg-3); font-size: 11px; }
+.hosted-activity-event p { margin: 6px 0; color: var(--fg-3); }
+.hosted-activity-event summary { cursor: pointer; color: var(--fg-3); }
+.hosted-activity-event pre { max-height: 180px; overflow: auto; padding: 12px; background: var(--sunken); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .local-activity__source { max-width: 155px; text-align: right; line-height: 1.4; } .local-activity__row { padding-inline: 12px; } }

@@ -1,0 +1,57 @@
+# Landing comparison evidence
+
+The landing figure in `Scale.tsx` reads the static results in `scale-data.ts`. These are
+from the October 13, 2026 local scripted-change experiment, independent of the
+recorded example. This file is included by `scripts/package-source.mjs` at
+`braid/public/scale-evidence.txt` in the source download.
+
+| Concurrent scripted changes | Braid merged | Git queue merged | Cross-file breaks caught by each queue | Silent wrong results detected |
+| --- | --- | --- | --- | --- |
+| 25 | 16 | 9 | 2 | 0 |
+| 50 | 29 | 12 | 4 | 0 |
+| 100 | 55 | 18 | 8 | 0 |
+
+## What was measured
+
+All proposals branched from one pinned base of the MIT-licensed Relay TypeScript
+webhook example from `worker/seed.ts`. The harness added a documented test and
+compatibility scaffold before branching; this was not an unmodified upstream
+project. All 100 proposals independently passed typechecking, project tests and
+their own retained intent test. The 25- and 50-change runs are prefixes of that
+same fixed dataset. Every strategy/run started again from the common base.
+
+Braid used the production `worker/compose.ts` composer with the default merge
+policy. The Git queue used native `git merge-tree --write-tree --messages` with
+the default `ort` merge and no union attributes. Both composed queued proposals
+onto their current main, ran typechecking and tests on each clean combined tree,
+and accepted only passing results. Rejected changes were neither revised nor
+retried; partial changes never entered main.
+
+At 100 changes, Braid's additional 37 merges came from independent config/list
+entries (15), CLI/list entries (11) and package JSON edits (11). The workload
+deliberately exercises supported merge shapes; these percentages do not predict
+arbitrary agent workloads. Other overlapping changes still conflicted.
+
+Both queues caught the same eight deliberately seeded cross-file incompatibilities:
+four field-renaming contracts and four serialized-payload signature contracts.
+Unmodified intent tests were retained outside the composed tree and rechecked
+after each acceptance. None detected a silent wrong result. A negative control
+that erased a helper and its in-tree test was caught by the retained test.
+These checks establish the tested contracts, not universal semantic correctness.
+
+The agents' edits were scripted and execution was local. No models, GitHub merge
+queue, Cloudflare load, remote pushes, approval processing or concurrent-writer
+races were measured. Inputs represented already-approved changes; the harness
+explicitly configured and ran the verification gates.
+
+## Evidence identifiers
+
+The retained local audit is `.cloudflare/design/audit/agent-scale/README.md`, with
+the immutable changes in `dataset.json`, exact outputs in `final-{braid,git}-{N}.json`,
+and failed checks in `semantic-breaks.md` and `logs/`. That ignored runtime audit is
+not included in source archives; this summary preserves its measurement boundaries.
+
+- Common Git base: `b580918b47c4cc02c4d825c108572c7946759eee`.
+- Seed SHA-256: `a4023d7b0d95879476f9b33a3575ca0ddd566a2c7efd29450045e62feeff66cd`.
+- Braid's final 100-change commit: `2e033f05cccb4bdadb5503610201691f840bda13`.
+- Git's final 100-change commit: `263a02e067155921b907c7ac2c78600c3ada79e8`.

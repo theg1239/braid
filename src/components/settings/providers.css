@@ -1,0 +1,5 @@
+.provider-rows { border-block: 1px solid var(--line); }
+.provider-state { display: block; min-height: 36px; }
+.provider-state > .skeleton-line + .skeleton-line { margin-top: 6px; }
+.provider-rows .srow__control { min-height: 32px; }
+.provider-rows .srow__control > [role='combobox'] { flex: 1; min-width: 0; max-width: 240px; }

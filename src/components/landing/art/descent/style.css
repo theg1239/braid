@@ -1,0 +1,67 @@
+/* The artwork's layer belongs above the page's own background and below everything on it. */
+.landing:has(> .descent-art) {
+  isolation: isolate;
+}
+
+.descent-art {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  height: 100vh;
+  height: 100lvh;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  background: #08090a;
+}
+
+/* The night deepens from near-black to navy as the reader descends: a navy layer faded in on the compositor. */
+.descent-art__sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#090b12, #0a0e1a 50%, #0b1020 78%, #0e1529);
+  opacity: 0;
+  will-change: opacity;
+}
+
+.descent-art__sea {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #070a0f;
+  transform: translate3d(0, 110vh, 0);
+  will-change: transform;
+}
+
+.descent-art__sea img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.descent-art__sea img[data-loaded] {
+  opacity: 1;
+}
+
+.descent-art__stars {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+
+.descent-art[data-ready] .descent-art__stars {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .descent-art__stars,
+  .descent-art__sea img {
+    transition: none;
+  }
+}

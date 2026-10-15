@@ -1,0 +1,208 @@
+/*
+ * Blame: runs of lines with who last changed them on the left, as GitHub lays it out. Each run sits
+ * at its exact offset inside a body of the file's full height, with only nearby lines rendered.
+ * Loaded with the Code screen.
+ */
+
+.blame {
+  --who: 272px;
+  position: relative;
+}
+
+/* Who wrote the file, above the runs; each writer stays whole and the line wraps between them. */
+.blame__sum {
+  display: block;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.blame__share {
+  display: inline-flex;
+  flex: none;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.blame__share + .blame__share,
+.blame__note { margin-left: 16px; }
+
+.blame__share-name {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.blame__share-owner,
+.blame__share-lines,
+.blame__note {
+  color: var(--fg-3);
+}
+
+.blame__note {
+  flex: none;
+}
+
+.blame__body {
+  position: relative;
+  width: max(100%, calc(var(--who) + 84px + var(--chars, 80) * 1ch));
+}
+
+.blame__hunk {
+  position: absolute;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  box-shadow: inset 0 1px var(--line);
+}
+
+.blame__hunk[data-first] {
+  box-shadow: none;
+}
+
+/* Who: the model or the person, the owner, and the age. Opens the commit's card. */
+.blame__who {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  width: var(--who);
+  height: 20px;
+  padding: 0 10px 0 12px;
+  overflow: hidden;
+  color: var(--fg-2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+}
+
+.blame__who:hover,
+.blame__who[data-popup-open] {
+  background: var(--hover);
+}
+
+.blame__who:focus-visible {
+  outline-offset: -2px;
+}
+
+.blame__name {
+  overflow: hidden;
+  color: var(--fg);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.blame__owner {
+  overflow: hidden;
+  color: var(--fg-3);
+  text-overflow: ellipsis;
+}
+
+/* Read from signs in the commit rather than seen: the run stays, its claim is quieter. */
+.blame__weak {
+  color: var(--fg-3);
+}
+
+.blame__hunk[data-confidence='inferred'] .blame__name {
+  color: var(--fg-2);
+  font-weight: 400;
+}
+
+.blame__age {
+  flex: none;
+  margin-left: auto;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.blame__lines {
+  flex: 1;
+  box-sizing: border-box;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--line);
+  list-style: none;
+}
+
+.blame__line {
+  display: flex;
+  height: 20px;
+}
+
+.blame__num {
+  flex: none;
+  width: 48px;
+  padding: 0 10px 0 12px;
+  color: var(--fg-3);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.blame__line[data-selected] { background: var(--selected); }
+.blame__num { text-decoration: none; }
+.blame__num:hover { color: var(--fg); text-decoration: underline; }
+
+.blame__text {
+  padding: 0 24px 0 12px;
+  color: var(--fg);
+  white-space: pre;
+}
+
+/* The commit's card. */
+.blame-card {
+  width: min(380px, calc(100vw - 32px));
+  padding: 12px 14px 14px;
+}
+
+.blame-card__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  text-wrap: pretty;
+}
+
+.blame-card__hash {
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.blame-card__facts {
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+.blame-card__parent {
+  color: var(--fg-3);
+}
+
+@media (max-width: 640px) {
+  .blame {
+    --who: 168px;
+  }
+
+  /* The name and the age fit; the owner and the word wait for the card, the weaker name still says inferred. */
+  .blame__owner,
+  .blame__weak {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .blame__line, .blame__who { height: var(--source-line-height); line-height: var(--source-line-height); }
+  .blame-card a { display: inline-flex; align-items: center; min-width: 32px; min-height: 32px; }
+}

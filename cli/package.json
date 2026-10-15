@@ -1,0 +1,34 @@
+{
+  "name": "braid-git",
+  "version": "0.1.0",
+  "description": "Braid on the command line: sign coding agents in with their owner's approval, run them with their identity, submit changes, and see which agent or person wrote every line.",
+  "keywords": [
+    "git",
+    "cli",
+    "coding-agents",
+    "ai-agents",
+    "provenance",
+    "blame",
+    "code-review",
+    "merge-queue",
+    "braid"
+  ],
+  "homepage": "https://braid-git.acmvit.workers.dev",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "braid": "dist/braid.mjs",
+    "braid-git": "dist/braid.mjs"
+  },
+  "files": [
+    "dist/braid.mjs",
+    "dist/LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "rolldown -c rolldown.config.ts",
+    "prepack": "npm run build"
+  }
+}

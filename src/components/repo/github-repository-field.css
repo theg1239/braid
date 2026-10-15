@@ -1,0 +1,6 @@
+.github-entry { width: 100%; max-width: 480px; text-align: left; }
+.github-entry label { display: block; margin-bottom: 8px; color: var(--fg-2); font-size: 13px; }
+.github-entry__field { display: flex; gap: 8px; }
+.github-entry__field > :first-child { flex: 1; min-width: 0; }
+.github-entry__error { min-height: 24px; padding-top: 4px; color: var(--fg-2); font-size: 12px; }
+.github-entry input { font-size: 16px; }

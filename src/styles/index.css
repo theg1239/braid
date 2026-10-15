@@ -1,0 +1,509 @@
+/*
+ * Braid tokens and shared pieces. Kumo's standalone stylesheet (imported first in
+ * main.tsx) supplies the components, the dark theme and the semantic tokens; all of
+ * this builds on those tokens. Resets join Kumo's base layer; app classes stay
+ * unlayered so a className on a Kumo component wins predictably.
+ */
+
+/*
+ * Geist, split like Google Fonts serves it: the Latin face covers everything the interface
+ * itself draws and is preloaded; the extended face loads only for text that needs it. Vite
+ * hashes the files, so they can be cached forever.
+ */
+@font-face {
+  font-family: 'Geist';
+  src: url('../fonts/Geist-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2199, U+2212, U+2215, U+2318, U+2325, U+2713-2714, U+2717-2718, U+25CF, U+2B06-2B07, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Geist';
+  src: url('../fonts/Geist-ext.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-0113, U+0116-012B, U+012E-0130, U+0132-0137, U+0139-013E, U+0141-0148, U+014A-014D, U+0150-0151, U+0154-017E, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01CD-01CE, U+01E4-01E9, U+0218-021B, U+0237, U+0259, U+02B9, U+02C7-02C8, U+02D8-02D9, U+02DB, U+02DD, U+0300-0303, U+0306-0307, U+0309-030C, U+0312, U+031B, U+0323, U+0326-0328, U+0335-0338, U+039B, U+03A9, U+03BB-03BC, U+03C0, U+03C9, U+0400-045F, U+0462-0463, U+046A-046B, U+0472-0475, U+0490-0493, U+0496-0497, U+049A-049B, U+04A2-04A3, U+04AE-04B3, U+04B6-04B7, U+04BA-04BB, U+04C0, U+04CF, U+04D8-04D9, U+04E2-04E3, U+04E8-04E9, U+04EE-04EF, U+0E3F, U+1E20-1E21, U+1E80-1E85, U+1E9E, U+1EA0-1EF9, U+2070, U+2074-2079, U+2080-2089, U+20AA, U+20B1, U+20B4, U+20B9, U+20BD, U+2116-2117, U+2153-2155, U+215B-215E, U+219D, U+21A9-21AA, U+21B0-21B1, U+21B3-21B5, U+21E4-21E5, U+21E7, U+2202, U+2206, U+220F, U+2211, U+221A, U+221E, U+222B, U+2236, U+2248, U+2260, U+2264-2265, U+2460-2468, U+24EA, U+24FF, U+25B2-25B3, U+25B6-25B7, U+25BC-25BD, U+25C0-25C1, U+25CA-25CC, U+2639-263A, U+2776-277E, U+3003, U+301C, U+A78B-A78C, U+F8FF, U+FB01-FB02;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../fonts/GeistMono-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2190-2199, U+2212, U+2215, U+2318, U+2325, U+2713-2714, U+2717-2718, U+25CF, U+2B06-2B07, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../fonts/GeistMono-ext.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-0113, U+0116-012B, U+012E-0130, U+0134-0137, U+0139-013E, U+0141-0148, U+014A-014D, U+0150-0151, U+0154-017E, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01CD-01CE, U+01E4-01E9, U+0218-021B, U+0237, U+0259, U+02B9, U+02C7-02C8, U+02D8-02D9, U+02DB, U+02DD, U+0300-0303, U+0306-0307, U+0309-030C, U+0312, U+031B, U+0323, U+0326-0328, U+0335-0338, U+039B, U+03A9, U+03BB-03BC, U+03C0, U+0400-045F, U+0462-0463, U+046A-046B, U+0472-0475, U+0490-0493, U+0496-0497, U+049A-049B, U+04A2-04A3, U+04AE-04B3, U+04B6-04B7, U+04BA-04BB, U+04C0, U+04CF, U+04D8-04D9, U+04E2-04E3, U+04E8-04E9, U+04EE-04EF, U+0E3F, U+1E20-1E21, U+1E80-1E85, U+1E9E, U+1EA0-1EF9, U+2070, U+2074-2079, U+2080-2089, U+20AA, U+20B1, U+20B4, U+20B9, U+20BD, U+2107, U+2116-2117, U+2153-2155, U+215B-215E, U+219D, U+21A9-21AA, U+21B0-21B1, U+21B3-21B5, U+21E4-21E5, U+21E7, U+2202, U+2206, U+220F, U+2211, U+221A, U+221E, U+222B, U+2236, U+2248, U+2260, U+2264-2265, U+2326-2327, U+232B, U+23CE, U+240B-240C, U+2423, U+2460-2468, U+24EA, U+24FF-259F, U+25B2-25B3, U+25B6-25B7, U+25BC-25BD, U+25C0-25C1, U+25CA-25CC, U+2776-277E, U+3003, U+301C, U+A78B-A78C, U+F8FF;
+}
+
+/* Metric-matched fallbacks (computed from the Geist files): the swap to Geist moves nothing. */
+@font-face {
+  font-family: 'Geist Fallback';
+  src: local('Arial'), local('Helvetica Neue'), local('Helvetica');
+  size-adjust: 105.53%;
+  ascent-override: 95.23%;
+  descent-override: 27.95%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Geist Mono Fallback';
+  src: local('Menlo'), local('Consolas'), local('Courier New');
+  size-adjust: 99.67%;
+  ascent-override: 100.83%;
+  descent-override: 29.6%;
+  line-gap-override: 0%;
+}
+
+:root {
+  --font-sans: 'Geist', 'Geist Fallback', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', ui-monospace, monospace;
+
+  /* Surfaces and text, straight from Kumo's semantic tokens. */
+  --bg: var(--color-kumo-canvas);
+  --panel: var(--color-kumo-base);
+  --panel-raised: color-mix(in oklch, var(--color-kumo-base), white 2.5%);
+  --sunken: var(--color-kumo-recessed);
+  --hover: color-mix(in oklch, var(--color-kumo-tint) 60%, transparent);
+  --selected: var(--color-kumo-tint);
+  --line: var(--color-kumo-hairline);
+  --line-strong: var(--color-kumo-line);
+  /* A text field's boundary, 3:1 against the canvas and the panels (1.4.11); hairlines keep --line-strong. */
+  --line-input: light-dark(oklch(62% 0 0), oklch(52% 0 0));
+  --fg: var(--text-color-kumo-default);
+  --fg-2: var(--text-color-kumo-subtle);
+  --fg-3: light-dark(oklch(50% 0 0), oklch(66% 0 0));
+  /* Quiet text still meets AA on raised panels, selected rows and the landing figures. */
+  --fg-4: light-dark(oklch(47% 0 0), oklch(64% 0 0));
+  --focus: var(--text-color-kumo-link);
+
+  /* State colour. Nothing else in the interface is chromatic. */
+  --info: var(--color-kumo-info);
+  --ok: var(--color-kumo-success);
+  --warn: var(--color-kumo-warning);
+  --warn-text: var(--text-color-kumo-warning);
+  --danger: var(--text-color-kumo-danger);
+  --merged: light-dark(oklch(52% 0.22 303), oklch(72% 0.17 303));
+
+  /* Diffs. */
+  --add: light-dark(oklch(48% 0.13 155), oklch(78% 0.14 155));
+  --del: light-dark(oklch(52% 0.19 25), oklch(72% 0.16 22));
+  --add-bg: light-dark(oklch(95% 0.05 155), oklch(52% 0.12 155 / 0.13));
+  --add-gutter: light-dark(oklch(90% 0.08 155), oklch(52% 0.12 155 / 0.22));
+  --del-bg: light-dark(oklch(95% 0.03 25), oklch(52% 0.17 25 / 0.13));
+  --del-gutter: light-dark(oklch(90% 0.06 25), oklch(52% 0.17 25 / 0.22));
+
+  /* Depth: a hairline of light on top edges, a soft shadow below. */
+  --lift: inset 0 1px 0 0 light-dark(oklch(100% 0 0 / 0.6), oklch(100% 0 0 / 0.045)), 0 1px 2px 0 oklch(0% 0 0 / 0.35);
+
+  --radius: 10px;
+  --radius-box: 6px;
+  --page-max: 1440px;
+  --page-x: 24px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --page-x: 16px;
+  }
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scrollbar-color: var(--line-strong) transparent;
+    /* Pages of different lengths never shift sideways. */
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    min-height: 100dvh;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  ::selection {
+    background: oklch(55% 0.16 255 / 0.4);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+}
+
+#root {
+  isolation: isolate;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.quiet {
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+.text-link {
+  color: var(--fg-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+
+.text-link:hover {
+  color: var(--fg);
+  text-decoration-color: var(--fg-3);
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  color: var(--fg-3);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.stats {
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stats__add {
+  color: var(--add);
+}
+
+.stats__del {
+  color: var(--del);
+}
+
+/* ---------- Status ---------- */
+
+.phase-badge {
+  flex: none;
+}
+
+.agent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.agent-status[data-tone='error'] {
+  color: var(--danger);
+}
+
+.agent-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-name__text {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.agent-name__role {
+  color: var(--fg-3);
+}
+
+/* Kumo marks emphasis variants with inline color tokens. Keep every primary control flat. */
+[data-kumo-component$='Button'][style*='--color-kumo-brand'] { background: var(--fg); box-shadow: 0 0 0 1px var(--line-strong); }
+[data-kumo-component$='Button'][style*='--color-kumo-brand']:hover { background: var(--fg-2); }
+[data-kumo-component$='Button'][style*='--color-kumo-brand']:disabled { background: var(--selected); }
+[data-kumo-component$='Button'] > span[aria-hidden='true'] { display: none; }
+[data-kumo-component$='Button'][style*='--color-kumo-brand'] > span.relative { color: var(--bg); }
+[data-kumo-component$='Button'][style*='--color-kumo-brand']:disabled > span.relative { color: var(--fg-3); }
+[data-kumo-component$='Button'][style*='--color-kumo-brand']:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+
+/* Kumo's text fields draw a 1 px ring in its line colour, 1.5:1 on the canvas. Focus keeps Kumo's own ring. */
+input.ring-kumo-line:not(:focus), textarea.ring-kumo-line:not(:focus) { --tw-ring-color: var(--line-input); }
+
+/* ---------- States ---------- */
+
+.state {
+  display: flex;
+  justify-content: center;
+  padding: 56px 16px;
+}
+
+.state--page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 64px 24px;
+  color: var(--fg-3);
+  text-align: center;
+}
+
+.state--page h1 {
+  color: var(--fg);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.state__icon {
+  color: var(--fg-4);
+}
+
+/* ---------- Facts ---------- */
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  font-size: 13px;
+}
+
+.facts dt {
+  color: var(--fg-3);
+}
+
+.facts dd {
+  min-width: 0;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Dialogs: Kumo dialogs carry no padding of their own ---------- */
+
+.dialog {
+  padding: 20px;
+  max-height: calc(100dvh - 4rem);
+  overflow-y: auto;
+}
+
+.dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 26px;
+}
+
+.dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.dialog__text {
+  margin-top: 8px;
+  color: var(--fg-2);
+}
+
+.dialog__mono {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--sunken);
+  color: var(--fg-3);
+  font-size: 11.5px;
+  line-height: 16px;
+  word-break: break-all;
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dialog__form .dialog__actions {
+  margin-top: 0;
+}
+
+/* ---------- Bordered lists: rows, files, reviews, checks, areas, notes, waits ---------- */
+
+.list,
+.notes,
+.result-list,
+.viewer,
+.repo__file {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+.result-row + .result-row {
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- Sections ---------- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.section__title,
+.group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tab-count {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--selected);
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Disclosures (Kumo Collapsible) ---------- */
+
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 0;
+  border-radius: 6px;
+  color: var(--fg-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.disclosure:hover {
+  color: var(--fg);
+}
+
+.disclosure--sm {
+  padding: 2px 0;
+  font-size: 12.5px;
+}
+
+.disclosure__caret {
+  flex: none;
+  color: var(--fg-3);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.disclosure[data-panel-open] .disclosure__caret {
+  transform: rotate(90deg);
+}
+
+.disclosure__panel,
+.result-row__panel {
+  height: var(--collapsible-panel-height);
+  overflow: hidden;
+  transition: height 0.24s var(--ease-out);
+}
+
+.disclosure__panel[data-starting-style],
+.disclosure__panel[data-ending-style],
+.result-row__panel[data-starting-style],
+.result-row__panel[data-ending-style] {
+  height: 0;
+}
+
+/* ---------- Skeletons ---------- */
+
+.skeleton-title {
+  width: 40%;
+  height: 22px;
+}
+
+.skeleton-line {
+  height: 14px;
+}
+
+.skeleton-line--short {
+  width: 55%;
+}
+
+/* ---------- Motion ---------- */
+
+@keyframes enter {
+  from { transform: translateY(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

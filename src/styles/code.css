@@ -1,0 +1,344 @@
+/*
+ * Code on screen: the states around it, prose rendered plain, and the variables the diff
+ * viewer reads. Diff rows themselves are drawn by @pierre/diffs (components/code/pierre.tsx).
+ */
+
+.code {
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-ligatures: none;
+  line-height: 20px;
+  tab-size: 2;
+}
+
+.code--empty {
+  padding: 32px 16px;
+  color: var(--fg-3);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* A version being read, or one that could not be. The placeholder text is never shown as code. */
+.code--error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+}
+
+.code--error {
+  color: var(--fg-2);
+}
+
+.viewer__note {
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+/* A text past the inline limit: each side's size and download, with nothing cut. */
+.code--large {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 28px 16px;
+  color: var(--fg-2);
+}
+
+.code__large-title {
+  margin: 0;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.code__sides {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.code__side {
+  display: grid;
+  grid-template-columns: minmax(56px, auto) auto auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 28px;
+}
+
+.code__side-name {
+  color: var(--fg);
+  font-weight: 500;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.code__side-size {
+  color: var(--fg-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+
+.code:focus-visible {
+  outline-offset: -2px;
+}
+
+.code__table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+}
+
+.code__table tbody > :first-child > td {
+  padding-top: 8px;
+}
+
+.code__table tbody > :last-child > td {
+  padding-bottom: 8px;
+}
+
+.code__num {
+  width: 48px;
+  padding: 0 10px 0 12px;
+  color: var(--fg-3);
+  text-align: right;
+  vertical-align: top;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.code__line {
+  padding: 0 24px 0 12px;
+  color: var(--fg);
+  white-space: pre;
+}
+
+.code__row[data-selected] {
+  background: var(--selected);
+}
+
+.code__num a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.code__table[data-wrap] {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.code__table[data-wrap] .code__line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+
+/* ---------- The viewer: @pierre/diffs renders into a shadow root; these custom properties cross it ---------- */
+
+.code--view {
+  overflow: visible;
+}
+
+.diff-function { position: sticky; top: var(--diff-context-top, 0px); z-index: 1; height: 28px; background: var(--sunken); border-bottom: 1px solid var(--line); }
+.diff-function__signature { display: block; width: 100%; height: 28px; padding: 0 12px; color: var(--fg-2); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; font-size: 11.5px; }
+.diff-function__signature:not(:disabled) { cursor: pointer; }
+.diff-function__signature:not(:disabled):hover { color: var(--fg); background: var(--hover); }
+.fsec { --diff-context-top: 41px; }
+@media (max-width: 767px) { .fsec { --diff-context-top: 45px; } }
+
+diffs-container {
+  display: block;
+  --code-selected-number: #becfff;
+  --diffs-font-family: var(--font-mono);
+  --diffs-header-font-family: var(--font-sans);
+  --diffs-font-size: 12.5px;
+  --diffs-line-height: 20px;
+  --diffs-tab-size: 2;
+  --diffs-font-features: 'liga' 0, 'calt' 0;
+  --diffs-addition-color-override: var(--add);
+  --diffs-deletion-color-override: var(--del);
+  --diffs-modified-color-override: var(--info);
+  --diffs-bg-addition-override: var(--add-bg);
+  --diffs-bg-addition-number-override: var(--add-gutter);
+  --diffs-bg-deletion-override: var(--del-bg);
+  --diffs-bg-deletion-number-override: var(--del-gutter);
+  --diffs-fg-number-override: var(--fg-3);
+  --diffs-bg-separator-override: color-mix(in oklch, var(--info) 7%, transparent);
+  --diffs-bg-hover-override: var(--hover);
+}
+
+/* Use the existing gutter width; 24px rows give each comment target its own space. */
+diffs-container.code--commentable {
+  --diffs-line-height: 24px;
+}
+
+/* GitHub's branch switcher, above the files and the tree */
+
+.branch-menu__trigger {
+  max-width: 260px;
+}
+
+.branch-menu__current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 300px;
+  padding: 8px;
+}
+
+.branch-menu__list {
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.branch-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+
+.branch-menu__item:hover,
+.branch-menu__item:focus-visible {
+  background: var(--selected);
+  color: var(--fg);
+}
+
+.branch-menu__check {
+  flex: none;
+  visibility: hidden;
+}
+
+.branch-menu__item[aria-current='page'] {
+  color: var(--fg);
+}
+
+.branch-menu__item[aria-current='page'] .branch-menu__check {
+  visibility: visible;
+}
+
+.branch-menu__name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-menu__default {
+  flex: none;
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.branch-menu__empty,
+.branch-menu__copying {
+  padding: 6px 8px;
+  color: var(--fg-3);
+  font-size: 12.5px;
+}
+
+.branch-menu__copying {
+  border-top: 1px solid var(--line);
+}
+
+.repo__tree-head {
+  padding: 0 0 10px;
+}
+
+/* An import still copying, in place of the latest commit */
+
+.import-bar {
+  position: relative;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.import-bar .import-bar__label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+
+.import-bar__label svg {
+  flex: none;
+}
+
+.import-bar__time,
+.import-bar .commit-bar__right {
+  flex: none;
+  margin-left: auto;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+  min-width: 8ch;
+  text-align: right;
+}
+.import-bar .import-bar__label, .import-bar .commit-bar__right { grid-column: auto; }
+
+/* The network, code chunk and highlighting worker share one placeholder. */
+.code--pending { position: relative; }
+.code--pending > .code-skeleton { position: absolute; inset: 0; background: var(--panel); pointer-events: none; }
+.code-comment-add { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 0; border-radius: 3px; color: var(--bg); background: var(--focus); cursor: pointer; }
+
+.repo__phone-bar { display: none; }
+
+@media (max-width: 767px) {
+  .repo__file { --source-line-height: 32px; }
+  .repo__file .code-skeleton__row, .code--view .code-skeleton__row { height: var(--source-line-height, 20px); }
+  diffs-container.code--source { --diffs-line-height: var(--source-line-height); }
+  .repo__file .code__num a { display: inline-flex; align-items: center; justify-content: flex-end; min-width: 32px; min-height: 32px; }
+  .readme .md__link, .repo__file .md__link { display: inline-flex; align-items: center; min-height: 32px; max-width: 100%; overflow-wrap: anywhere; }
+  .repo__phone-bar { display: flex; align-items: center; gap: 8px; }
+  .repo__phone-bar .branch-menu__trigger { max-width: 140px; }
+  .repo__phone-bar .repo-bar__find { margin-left: auto; }
+  .repo__phone-bar .kbd { display: none; }
+  .repo-layout .repo__tree { display: none; max-height: min(50dvh, 360px); }
+  .repo-layout[data-tree-open] .repo__tree { display: block; }
+  .repo__tree-head { display: none; }
+  .tree__item { height: 36px; }
+  .repo-bar :is(button, input), .repo__phone-bar button, .branch-menu__trigger,
+  .file-bar :is(button, input, a), .file-open a, .commit-bar a {
+    min-width: 32px;
+    min-height: 32px;
+  }
+  .branch-menu__all { min-height: 32px; }
+  .file-bar { flex-wrap: wrap; }
+  .file-bar .file-bar__location { flex-basis: 100%; }
+  .file-bar .file-bar__path { flex-basis: 100%; white-space: normal; overflow: visible; }
+  .file-bar__path a, .commit-bar a, .file-open a { display: inline-flex; align-items: center; justify-content: center; }
+  .crumbs { overflow-wrap: anywhere; }
+  .crumbs > * { min-width: 0; }
+  .file-bar__end { display: flex; width: 100%; }
+  .file-bar__end .repo-bar__find { display: none; }
+  .repo__file .file-bar__view + .file-bar__meta { margin-left: auto; }
+  .repo__file .file-bar__view button { padding-inline: 8px; }
+  .file-bar [role='tablist'] { height: 38px; }
+}

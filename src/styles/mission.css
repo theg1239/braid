@@ -1,0 +1,1038 @@
+/* ---------- Task header ---------- */
+
+.task-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.task-head__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.task-head__parent {
+  max-width: 40vw;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.task-head__action {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.task-head__intent {
+  max-width: 96ch;
+  color: var(--fg-2);
+  font-size: 13.5px;
+  line-height: 20px;
+  text-wrap: pretty;
+}
+
+/* One row of facts under the title: the state, counts and age. */
+.task-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  color: var(--fg-3);
+  font-size: 12.5px;
+}
+
+.task-head__stats {
+  font-size: 11.5px;
+}
+
+/* ---------- Task graph ---------- */
+
+.graph {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.graph__lines {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.graph__lines path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
+.graph__trunk {
+  stroke: var(--line-strong);
+  stroke-dasharray: 2 5;
+}
+
+.graph__trunk[data-merged] {
+  stroke: var(--merged);
+  stroke-dasharray: none;
+}
+
+.graph__spine {
+  stroke: var(--fg-4);
+}
+
+.graph__join,
+.graph__lane-join {
+  stroke: var(--fg-4);
+  stroke-dasharray: 2 5;
+}
+
+.graph__join[data-merged],
+.graph__lane-join[data-merged] {
+  stroke: var(--merged);
+  stroke-dasharray: none;
+}
+
+.graph__lane-line {
+  stroke: var(--fg-4);
+  transition: stroke 0.25s;
+}
+
+.graph__lane[data-selected] .graph__lane-line {
+  stroke: var(--fg-2);
+}
+
+.graph__lane[data-state='busy'] .graph__lane-line {
+  stroke: var(--info);
+  stroke-dasharray: 5 7;
+}
+
+.graph__lane[data-state='queued'] .graph__lane-line {
+  stroke-dasharray: 1 6;
+}
+
+.graph__lane[data-state='failed'] .graph__lane-line {
+  stroke: var(--danger);
+  stroke-dasharray: 4 5;
+}
+
+.graph__lane[data-state='merged'] .graph__lane-line {
+  stroke: var(--merged);
+}
+
+.graph__link path {
+  stroke: var(--fg-3);
+  stroke-width: 1.5;
+}
+
+.graph__link circle {
+  fill: var(--fg-3);
+}
+
+.graph__link[data-disposition='unresolved'] path {
+  stroke: var(--warn);
+}
+
+.graph__link[data-disposition='unresolved'] circle {
+  fill: var(--warn);
+}
+
+.graph__link[data-disposition='agreement'] path {
+  stroke-dasharray: 2 3;
+}
+
+.graph__labels {
+  position: absolute;
+  inset: 0;
+}
+
+.graph__ref {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.graph__ref--base {
+  transform: translate(-5px, -50%);
+}
+
+.graph__ref--merge {
+  transform: translate(calc(-100% + 5px), -50%);
+}
+
+button.graph__ref {
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button.graph__ref:hover .graph__ref-text {
+  color: var(--fg);
+}
+
+.graph__ref-text {
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--panel);
+  transition: color 0.15s;
+}
+
+.graph__node {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border: 2px solid var(--fg-2);
+  border-radius: 50%;
+  background: var(--fg-2);
+}
+
+.graph__ref--merge .graph__node {
+  border-color: var(--fg-4);
+  background: var(--panel);
+}
+
+.graph__ref--merge[data-tone='ready'] .graph__node {
+  border-color: var(--ok);
+}
+
+.graph__ref--merge[data-tone='ready'] .graph__ref-text {
+  color: var(--ok);
+}
+
+.graph__ref--merge[data-tone='blocked'] .graph__node {
+  border-color: var(--danger);
+}
+
+.graph__ref--merge[data-tone='blocked'] .graph__ref-text {
+  color: var(--danger);
+}
+
+.graph__ref--merge[data-tone='busy'] .graph__node {
+  border-color: var(--info);
+}
+
+.graph__ref--merge[data-tone='merged'] .graph__node {
+  border-color: var(--merged);
+  background: var(--merged);
+}
+
+.graph__ref--merge[data-tone='merged'] .graph__ref-text {
+  color: var(--fg);
+  font-family: var(--font-mono);
+}
+
+.graph__lane-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--panel);
+  white-space: nowrap;
+  transform: translateY(-50%);
+  transition: background-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+
+.graph__lane-label:hover {
+  background: var(--selected);
+}
+
+.graph__lane-label[aria-pressed='true'] {
+  background: var(--selected);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.graph__lane-name {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.graph__lane-role {
+  overflow: hidden;
+  color: var(--fg-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.graph__head {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--fg-3);
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translate(-100%, -50%);
+}
+
+.graph__head[data-state='failed'] {
+  color: var(--danger);
+}
+
+.graph__head-hash {
+  color: var(--fg-2);
+}
+
+.graph__marker {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px 2px 0;
+  border-radius: 6px;
+  color: var(--fg-3);
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translate(-7px, -50%);
+  cursor: pointer;
+}
+
+.graph__marker-glyph {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.graph__marker[data-disposition='unresolved'] .graph__marker-glyph::before,
+.graph__marker[data-disposition='selected'] .graph__marker-glyph::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  content: '';
+  transform: rotate(45deg);
+}
+
+.graph__marker[data-disposition='unresolved'] .graph__marker-glyph::before {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--panel), 0 0 0 4px color-mix(in oklch, var(--warn) 40%, transparent);
+}
+
+.graph__marker[data-disposition='selected'] .graph__marker-glyph::before {
+  border: 1.5px solid var(--ok);
+  background: var(--panel);
+  box-shadow: 0 0 0 3px var(--panel);
+}
+
+.graph__marker[data-disposition='agreement'] .graph__marker-glyph {
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.graph__marker-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--panel);
+}
+
+.graph__marker-text .mono {
+  color: var(--fg-2);
+  transition: color 0.15s;
+}
+
+.graph__marker-note {
+  color: var(--fg-3);
+  text-align: left;
+}
+
+.graph__marker[data-disposition='unresolved'] .graph__marker-text .mono,
+.graph__marker[data-disposition='unresolved'] .graph__marker-note {
+  color: var(--warn-text);
+}
+
+.graph__marker:hover .graph__marker-text .mono {
+  color: var(--fg);
+}
+
+/* ---------- Agent rows: one line per agent, opening on what it wrote ---------- */
+
+.agent-rows {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+.agent-row + .agent-row {
+  border-top: 1px solid var(--line);
+}
+
+.agent-row[data-selected] {
+  background: color-mix(in oklch, var(--selected) 55%, transparent);
+}
+
+.agent-row__line {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 44px;
+  padding: 4px 14px 4px 6px;
+}
+
+.agent-row__toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.agent-row__toggle:hover {
+  background: var(--hover);
+}
+
+.agent-row__toggle:focus-visible {
+  outline-offset: -2px;
+}
+
+.agent-row__caret {
+  flex: none;
+  color: var(--fg-3);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.agent-row[data-open] .agent-row__caret {
+  transform: rotate(90deg);
+}
+
+.agent-row__name {
+  color: var(--fg);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.agent-row__role {
+  overflow: hidden;
+  color: var(--fg-3);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-row__stats {
+  flex: none;
+  font-size: 11.5px;
+}
+
+.agent-row__hash {
+  color: var(--fg-2);
+  font-size: 12px;
+}
+
+.agent-row[data-status='failed'] .agent-row__name {
+  color: var(--danger);
+}
+
+.agent-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 16px 40px;
+}
+
+.agent-row__summary {
+  max-width: 80ch;
+  color: var(--fg);
+  font-size: 13.5px;
+  line-height: 20px;
+  text-wrap: pretty;
+}
+
+.agent-row__error {
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.agent-row__stage {
+  display: block;
+  font-weight: 500;
+}
+
+.agent-row__files {
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+}
+
+.agent-row__detail {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  max-width: 80ch;
+  font-size: 13px;
+}
+
+.agent-row__detail dt {
+  color: var(--fg-3);
+  font-size: 12.5px;
+}
+
+.agent-row__detail dd {
+  min-width: 0;
+  color: var(--fg-2);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.agent-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+
+.agent-file:hover {
+  background: var(--hover);
+}
+
+.agent-file__path {
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-file__dir {
+  color: var(--fg-3);
+}
+
+.agent-file[data-outcome='not-chosen'] .agent-file__path {
+  color: var(--fg-4);
+  text-decoration: line-through;
+  text-decoration-color: var(--fg-4);
+}
+
+.agent-file[data-outcome='not-chosen'] .agent-file__stats {
+  opacity: 0.5;
+}
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.check-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.check-row__label {
+  color: var(--fg-2);
+}
+
+.check-row__value {
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.check-row[data-state='fail'] .check-row__value {
+  color: var(--danger);
+}
+
+.check-row[data-state='pass'] .check-row__value {
+  color: var(--ok);
+}
+
+/* ---------- Optional task details ---------- */
+
+.task-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.task-details__panel {
+  padding: 12px 0;
+}
+
+/* ---------- Launch context and activity ---------- */
+
+.launch-context__list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+
+.launch-context__item {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.launch-context__title {
+  overflow: hidden;
+  color: var(--fg);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kind-icon {
+  flex: none;
+  color: var(--fg-2);
+}
+
+/* The task's steps in the order they ran, one state icon each. */
+.task-steps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.task-steps__list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 720px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+.task-step {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  font-size: 13px;
+}
+
+.task-step + .task-step {
+  border-top: 1px solid var(--line);
+}
+
+.task-step__icon {
+  color: var(--ok);
+}
+
+.task-step[data-step='waiting'] .task-step__icon {
+  color: var(--warn);
+}
+
+.task-step[data-step='failed'] .task-step__icon {
+  color: var(--danger);
+}
+
+.task-step[data-step='running'] .task-step__name {
+  color: var(--fg);
+}
+
+.task-step__name {
+  overflow: hidden;
+  color: var(--fg-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.task-step__time {
+  color: var(--fg-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The pull request a task became: one row, linking to it. */
+.task-pull {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 720px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+  transition: background-color 0.15s;
+}
+
+.task-pull:hover {
+  background: var(--hover);
+}
+
+.task-pull .pr-state {
+  margin-top: 0;
+}
+
+.task-pull__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.task-pull__num {
+  color: var(--fg-3);
+  font-weight: 400;
+}
+
+.task-pull__into {
+  color: var(--fg-3);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* Before a result: the start command is the whole setup; once connected, only what the agent reported. */
+.task-handoff { display: grid; justify-items: start; gap: 14px; max-width: 880px; padding-block: 24px 20px; }
+.task-handoff p { margin: 0; }
+.task-handoff__code {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.task-handoff__actions { display: flex; align-items: center; gap: 14px; }
+.task-handoff__state { color: var(--fg); font-size: 15px; font-weight: 500; }
+.task-handoff__progress { color: var(--fg); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.task-handoff__time { color: var(--fg-3); font-weight: 400; font-size: 12px; }
+/* Main moved under a single-agent local task: the task stays, and the agent brings its checkout forward. */
+.update-note { max-width: 72ch; margin: 0; color: var(--warn-text); font-size: 13px; line-height: 19px; text-wrap: pretty; }
+.task-graph {
+  margin-bottom: 20px;
+}
+
+/* ---------- A task's next step ---------- */
+
+.task-next {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 880px;
+}
+
+.task-next__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  max-width: 76ch;
+  padding: 4px 0;
+  color: var(--fg);
+  font-size: 15px;
+  line-height: 24px;
+}
+
+.task-next__time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.task-next__progress {
+  color: var(--fg-2);
+}
+
+.task-next__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The task asks in a card of its own; a pull request asks in its merge box. */
+.question--task {
+  gap: 8px;
+  max-width: 880px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--warn) 42%, var(--line));
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+.question--task[data-kind='choice'] {
+  border-color: var(--line-strong);
+}
+
+/* Each agent's own summary is a choice. */
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-box);
+  background: var(--sunken);
+  text-align: left;
+}
+
+.choice__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.choice__name {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.choice__stats {
+  margin-left: auto;
+}
+
+.choice__summary {
+  color: var(--fg-2);
+  font-size: 13.5px;
+  line-height: 20px;
+  text-wrap: pretty;
+}
+
+.choice__action {
+  margin-top: auto;
+}
+
+.version-choice__heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; justify-content: space-between; }
+.version-choice__heading .quiet { font-size: 12px; }
+.version-choice__path { align-self: flex-start; font-size: 12px; overflow-wrap: anywhere; }
+.version-choice__compare { align-self: flex-start; }
+.choice__details { margin-bottom: 6px; color: var(--fg-2); font-size: 12px; }
+.choice__details summary { padding-block: 4px; color: var(--fg-3); cursor: pointer; }
+.choice__details p, .choice__details .check-list { margin-top: 8px; }
+.version-compare { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); }
+.version-compare__legend { display: flex; flex-wrap: wrap; gap: 4px 20px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.version-compare__legend span:first-child { color: var(--danger); }
+.version-compare__legend span:last-child { color: var(--ok); }
+
+.land {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 880px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--ok) 40%, var(--line));
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+.land__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.land__text {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.land__title {
+  color: var(--fg);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.land__line {
+  margin-top: 4px;
+  color: var(--fg-2);
+  line-height: 20px;
+  text-wrap: pretty;
+}
+
+.land__blocker {
+  margin-top: 6px;
+  color: var(--warn-text);
+  font-size: 13px;
+}
+
+.land__files {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.land__file {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.land__path {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.land__path:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.land__path[data-deleted] {
+  text-decoration: line-through;
+  text-decoration-color: var(--fg-3);
+}
+
+.land__chosen {
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+
+.land__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .question--task,
+  .land {
+    padding: 16px;
+  }
+}
+
+.task-head__crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg-3);
+  font-size: 22px;
+  line-height: 30px;
+  letter-spacing: -0.02em;
+}
+
+.task-head__crumb a:hover {
+  color: var(--fg);
+}
+
+.task-head__title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 30px;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+@media (max-width: 560px) {
+  .task-head__crumb, .task-head__title { font-size: 19px; line-height: 26px; }
+  .agent-row__line { flex-wrap: wrap; gap: 4px 10px; padding: 8px 12px; }
+  .agent-row__toggle { flex-basis: 100%; padding: 4px 0; }
+  .agent-row__name { white-space: normal; }
+  .agent-row__role { margin-left: auto; }
+  .agent-row__stats { margin-left: 20px; }
+  .agent-row__line > .agent-status { margin-left: auto; }
+  .agent-row__body { padding: 8px 12px 16px; }
+  .agent-row__detail { grid-template-columns: 1fr; gap: 4px; }
+  .agent-row__detail dt:not(:first-child) { margin-top: 8px; }
+  .land__file { flex-wrap: wrap; gap: 4px 10px; }
+  .land__path { flex-basis: 100%; }
+  .task-handoff__actions { flex-wrap: wrap; }
+  .task-pull { flex-wrap: wrap; }
+  .task-pull__title { flex-basis: calc(100% - 30px); white-space: normal; }
+  .task-pull__into { margin-left: auto; }
+}
+
+.agent-row__duration { color: var(--fg-3); white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
+.task-instruction { display: flex; flex-direction: column; gap: 12px; margin: 24px 0; }
+.task-instruction__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.task-step__instruction { display: block; margin-top: 4px; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.graph-files { display: none; }
+
+@media (max-width: 900px) {
+  .graph-files { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; }
+  .graph-files .graph__marker { position: static; display: flex; width: 100%; min-height: 32px; padding: 6px 10px; transform: none; text-align: left; }
+  .graph-files .graph__marker-text { flex: 1; flex-wrap: wrap; min-width: 0; gap: 2px 8px; background: none; }
+  .graph-files .graph__marker-text .mono { overflow-wrap: anywhere; white-space: normal; }
+  .graph-files .graph__marker-note { margin-left: auto; white-space: normal; }
+  .graph-files .graph__marker:hover { background: var(--hover); }
+}
+
+@media (max-width: 767px) {
+  .task-page :is(button, a, summary) { min-width: 32px; min-height: 32px; }
+  .task-head__crumb a, .version-choice__path { display: inline-flex; align-items: center; }
+  .agent-row__toggle { flex-wrap: wrap; }
+  .agent-row__role { white-space: normal; }
+}
+
+/* A state's room is its widest: every state shares one grid cell, and the ones not shown are hidden. */
+.reserve { display: inline-grid; }
+.reserve > * { grid-area: 1 / 1; }
+.reserve > [aria-hidden='true'] { visibility: hidden; }
+.agent-row__status { margin-left: auto; }

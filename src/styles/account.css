@@ -1,0 +1,297 @@
+/* ---------- Sign-in, team setup and approvals ---------- */
+
+.gate {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.gate__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px 16px 96px;
+  outline: none;
+}
+
+.gate__card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--lift);
+  animation: enter 0.28s var(--ease-out) backwards;
+}
+
+.gate__title {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: -0.02em;
+}
+
+.gate__text {
+  color: var(--fg-2);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+
+.gate__wide {
+  width: 100%;
+  justify-content: center;
+}
+
+.gate__or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.gate__or::before,
+.gate__or::after {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  content: '';
+}
+
+.gate__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gate__code,
+.gate__code input {
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+}
+
+.gate__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gate__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.gate__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  max-width: 560px;
+}
+
+/* ---------- Sign-in: the mark over one column of ways in, no card ---------- */
+
+.signin {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.signin__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 44px;
+  padding: 24px 16px 148px;
+  outline: none;
+}
+
+.signin__box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 336px;
+  animation: enter 0.28s var(--ease-out) backwards;
+}
+
+.signin__box > .mark {
+  align-self: center;
+  margin-bottom: 6px;
+  color: var(--fg);
+}
+
+.signin__title {
+  margin-bottom: 14px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.signin__foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+.signin__example {
+  color: var(--fg-2);
+  transition: color 0.15s;
+}
+
+.signin__example:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Agent approval ---------- */
+
+.connect {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  font-size: 13.5px;
+}
+
+.connect dt {
+  color: var(--fg-3);
+}
+
+.connect dd {
+  min-width: 0;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.connect__code {
+  font-size: 15px;
+  letter-spacing: 0.12em;
+}
+
+.connect__skeleton {
+  width: 60%;
+  height: 14px;
+}
+
+.connect__scope {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--sunken);
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.connect__cannot {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--fg-3);
+}
+
+.connect__cannot svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.connect__expiry {
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.connect__done {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--fg-2);
+}
+
+.connect__done svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ok);
+}
+
+/* ---------- Settings: team, account and agents ---------- */
+
+.audit {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.audit__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 13px;
+}
+
+.audit__row + .audit__row {
+  border-top: 1px solid color-mix(in oklch, var(--line) 60%, transparent);
+}
+
+.audit__text {
+  min-width: 0;
+  color: var(--fg-2);
+}
+
+.audit__who {
+  color: var(--fg);
+}
+
+.audit__time {
+  flex: none;
+  color: var(--fg-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.keys {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .gate__card {
+    padding: 22px 18px;
+  }
+}
+
+.username-preview { color: var(--fg-3); font-size: 13px; overflow-wrap: anywhere; }
+.personal-settings { max-width: 960px; display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 24px 36px; }
+.personal-settings__head { grid-column: 1 / -1; }
+.personal-settings__head h1 { margin: 0; font-size: 24px; font-weight: 600; }
+.personal-settings__nav { display: flex; flex-direction: column; gap: 4px; }
+.personal-settings__nav a { border-radius: 6px; padding: 8px 12px; color: var(--fg-3); }
+.personal-settings__nav a[aria-current] { background: var(--selected); color: var(--fg); font-weight: 600; }
+.personal-settings__body { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+@media (max-width: 640px) {
+  .personal-settings { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .personal-settings__nav { flex-direction: row; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+}

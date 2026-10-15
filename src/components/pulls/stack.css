@@ -1,0 +1,12 @@
+/* Pull request dependencies stay beside the title and follow the queue's merge order. */
+.pr-stack, .pull-stack { display: flex; align-items: center; gap: 6px; color: var(--fg-3); font-size: 12px; }
+.pr-stack { white-space: nowrap; }
+.pull-stack { flex-wrap: wrap; column-gap: 20px; row-gap: 6px; margin: 12px 0; }
+.queue-stacks { display: grid; gap: 12px; }
+.queue-stack { display: flex; flex-wrap: wrap; gap: 16px; padding: 14px 16px; margin: 0; list-style: none; border: 1px solid var(--line); border-radius: 6px; }
+.queue-stack li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.queue-stack__position { color: var(--fg-3); font-variant-numeric: tabular-nums; }
+
+.pull-restack { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; }
+.pull-restack__error { flex-basis: 100%; color: var(--fg-2); margin: 0; }
+.queue-stacks__pages { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }

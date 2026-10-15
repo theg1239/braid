@@ -1,0 +1,341 @@
+import { DurableObject } from 'cloudflare:workers';
+import { directoryOf, type BraidEnv } from '../env';
+import type { AccountIdentity } from '../../shared/account';
+import type { AgentScope } from '../../shared/types';
+import { exchangeGitHubToken, openGitHub, sealGitHub, type GitHubCredentials } from '../github/client';
+import { digest } from '../http/auth';
+import { ACCESS_LIFETIME, verifyAccess } from '../http/agent-token';
+import { HttpError, logFailure, refused, type Refusal } from '../errors';
+import type { GitHubIdentity } from '../repositories/provenance';
+import { ProviderFailure, ProviderStore, type HostedProvider, type ProviderOutcome } from '../agents/providers';
+import { checkProviderKey } from '../agents/provider-client';
+import { PROVIDERS, type ProviderConnection, type ProviderId } from '../../shared/providers';
+import { now } from '../workspace/domain';
+interface StoredPasskey { id: string; userId: string; publicKey: string; counter: number; transports: string[]; createdAt: string }
+export interface AgentGrant { id: string; user: AccountIdentity; workspaceId: string; scope: AgentScope; label: string; expires: number }
+interface GitHubImportGrant { user: AccountIdentity; workspaceId: string; repositoryId: number; fullName: string; token: string; expires: number; mirror?: boolean }
+
+const refreshable = (credentials: GitHubCredentials): credentials is GitHubCredentials & { refreshToken: string } =>
+  !!credentials.refreshToken && (credentials.refreshExpiresAt ?? 0) > Date.now();
+
+/** Durable revocation and shared request budgets for public team accounts. */
+export class Security extends DurableObject<BraidEnv> {
+  private githubRefreshes = new Map<string, Promise<string>>();
+  constructor(ctx: DurableObjectState, env: BraidEnv) {
+    super(ctx, env);
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS sessions (digest TEXT PRIMARY KEY, expires INTEGER NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS budgets (key TEXT PRIMARY KEY, used INTEGER NOT NULL, expires INTEGER NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS identities (digest TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS oauth (digest TEXT PRIMARY KEY, verifier TEXT NOT NULL, expires INTEGER NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS external_accounts (external_id TEXT PRIMARY KEY, user_id TEXT NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS passkeys (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, value TEXT NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS devices (digest TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, label TEXT NOT NULL, scope TEXT NOT NULL, expires INTEGER NOT NULL, polled INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, grant_value TEXT)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS agent_grants (digest TEXT PRIMARY KEY, id TEXT NOT NULL UNIQUE, user_id TEXT NOT NULL, value TEXT NOT NULL, expires INTEGER NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS compromised_grants (id TEXT PRIMARY KEY, expires INTEGER NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS security_audit (id INTEGER PRIMARY KEY, action TEXT NOT NULL, target TEXT NOT NULL, workspace_id TEXT NOT NULL, created_at TEXT NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS github_connections (user_id TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS github_imports (digest TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, value TEXT NOT NULL, expires INTEGER NOT NULL)');
+    // The GitHub account each person signed in or connected with, which names them in commits by its no-reply address.
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS github_identities (user_id TEXT PRIMARY KEY, github_id INTEGER NOT NULL, login TEXT NOT NULL, source TEXT NOT NULL)');
+  }
+  /**
+   * Records a person's GitHub account, read together from one GitHub answer. Signing in with GitHub names the
+   * account; connecting GitHub for repositories only fills it in when the person has none yet.
+   */
+  recordGitHubIdentity(userId: string, github: GitHubIdentity, source: 'sign-in' | 'connection') {
+    this.ctx.storage.sql.exec(source === 'sign-in'
+      ? 'INSERT INTO github_identities (user_id, github_id, login, source) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET github_id = excluded.github_id, login = excluded.login, source = excluded.source'
+      : 'INSERT INTO github_identities (user_id, github_id, login, source) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO NOTHING', userId, github.id, github.login, source);
+  }
+  githubIdentity(userId: string): GitHubIdentity | null {
+    const row = this.ctx.storage.sql.exec<{ github_id: number; login: string }>('SELECT github_id, login FROM github_identities WHERE user_id = ?', userId).toArray()[0];
+    return row ? { id: row.github_id, login: row.login } : null;
+  }
+  async connectGitHub(userId: string, credentials: GitHubCredentials) {
+    const value = await sealGitHub(this.env, `user:${userId}`, credentials);
+    this.ctx.storage.sql.exec('INSERT INTO github_connections (user_id, value) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET value = excluded.value', userId, value);
+  }
+  private async githubCredentials(userId: string): Promise<{ value: string; credentials: GitHubCredentials } | null> {
+    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM github_connections WHERE user_id = ?', userId).toArray()[0];
+    return row ? { value: row.value, credentials: await openGitHub<GitHubCredentials>(this.env, `user:${userId}`, row.value) } : null;
+  }
+  async githubConnection(userId: string): Promise<{ login: string } | null> {
+    // A connection sealed under an earlier session secret cannot be opened, which reads as none until the person reconnects.
+    const stored = await this.githubCredentials(userId).catch((error: unknown) => { if (error instanceof HttpError) return null; throw error; });
+    if (!stored || (stored.credentials.expiresAt <= Date.now() && !refreshable(stored.credentials))) return null;
+    return { login: stored.credentials.login };
+  }
+  disconnectGitHub(userId: string) {
+    this.ctx.storage.sql.exec('DELETE FROM github_connections WHERE user_id = ?', userId);
+    this.ctx.storage.sql.exec('DELETE FROM github_imports WHERE user_id = ?', userId);
+    this.ctx.storage.sql.exec("DELETE FROM github_identities WHERE user_id = ? AND source = 'connection'", userId);
+  }
+  async githubAccessToken(userId: string): Promise<{ ok: true; token: string } | Refusal> {
+    const run = this.githubRefreshes.get(userId) ?? this.refreshGitHub(userId);
+    this.githubRefreshes.set(userId, run);
+    try { return { ok: true, token: await run }; }
+    catch (error) { return refused(error, 502, 'The GitHub connection could not be refreshed.'); }
+    finally { if (this.githubRefreshes.get(userId) === run) this.githubRefreshes.delete(userId); }
+  }
+  private async refreshGitHub(userId: string): Promise<string> {
+    const stored = await this.githubCredentials(userId);
+    if (!stored) throw new HttpError(409, 'Connect GitHub to choose a repository.');
+    const previous = stored.credentials;
+    if (previous.expiresAt > Date.now() + 60_000) return previous.accessToken;
+    if (!refreshable(previous)) throw new HttpError(409, 'Reconnect GitHub to continue.');
+    const updated = await exchangeGitHubToken(this.env, { grant_type: 'refresh_token', refresh_token: previous.refreshToken }, previous.login);
+    const sealed = await sealGitHub(this.env, `user:${userId}`, updated);
+    // A sign-out of this connection or a newer authorization wins over an in-flight refresh.
+    const current = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM github_connections WHERE user_id = ?', userId).toArray()[0];
+    if (current?.value !== stored.value) throw new HttpError(409, 'The GitHub connection changed. Try again.');
+    this.ctx.storage.sql.exec('UPDATE github_connections SET value = ? WHERE user_id = ?', sealed, userId);
+    return updated.accessToken;
+  }
+  async issueGitHubImport(hash: string, grant: GitHubImportGrant) {
+    const sealed = await sealGitHub(this.env, `import:${hash}`, grant);
+    this.ctx.storage.sql.exec('INSERT INTO github_imports (digest, user_id, workspace_id, value, expires) VALUES (?, ?, ?, ?, ?)', hash, grant.user.id, grant.workspaceId, sealed, grant.expires);
+    await this.scheduleCleanup();
+  }
+  async githubImport(hash: string): Promise<GitHubImportGrant | null> {
+    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM github_imports WHERE digest = ? AND expires > ?', hash, Date.now()).toArray()[0];
+    return row ? openGitHub<GitHubImportGrant>(this.env, `import:${hash}`, row.value) : null;
+  }
+  finishGitHubImports(workspaceId: string) { this.ctx.storage.sql.exec('DELETE FROM github_imports WHERE workspace_id = ?', workspaceId); }
+  async issue(digest: string, expires: number, identity?: AccountIdentity) {
+    if (identity && this.env.DIRECTORY) await directoryOf(this.env).recordPerson(identity.id);
+    this.ctx.storage.sql.exec('INSERT INTO sessions (digest, expires) VALUES (?, ?)', digest, expires);
+    if (identity) this.ctx.storage.sql.exec('INSERT INTO identities (digest, value) VALUES (?, ?)', digest, JSON.stringify(identity));
+    await this.scheduleCleanup();
+  }
+  valid(digest: string) {
+    return this.ctx.storage.sql.exec('SELECT digest FROM sessions WHERE digest = ? AND expires > ?', digest, Date.now()).toArray().length === 1;
+  }
+  identity(digest: string): AccountIdentity | null {
+    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT i.value FROM identities i JOIN sessions s ON s.digest = i.digest WHERE s.digest = ? AND s.expires > ?', digest, Date.now()).toArray()[0];
+    return row ? JSON.parse(row.value) : null;
+  }
+  revoke(digest: string) {
+    this.ctx.storage.sql.exec('DELETE FROM sessions WHERE digest = ?', digest);
+    this.ctx.storage.sql.exec('DELETE FROM identities WHERE digest = ?', digest);
+  }
+  async beginOAuth(digest: string, verifier: string) {
+    this.ctx.storage.sql.exec('INSERT INTO oauth (digest, verifier, expires) VALUES (?, ?, ?)', digest, verifier, Date.now() + 600_000);
+    await this.scheduleCleanup();
+  }
+  takeOAuth(digest: string): string | null {
+    return this.ctx.storage.transactionSync(() => {
+      const row = this.ctx.storage.sql.exec<{ verifier: string; expires: number }>('SELECT verifier, expires FROM oauth WHERE digest = ?', digest).toArray()[0];
+      this.ctx.storage.sql.exec('DELETE FROM oauth WHERE digest = ?', digest);
+      return row && row.expires > Date.now() ? row.verifier : null;
+    });
+  }
+  profile(external: AccountIdentity): AccountIdentity {
+    return this.ctx.storage.transactionSync(() => {
+      const linked = this.ctx.storage.sql.exec<{ id: string; email: string; name: string }>('SELECT p.id, p.email, p.name FROM profiles p JOIN external_accounts e ON e.user_id = p.id WHERE e.external_id = ?', external.id).toArray()[0];
+      if (linked) return linked;
+      // Both callers have just verified ownership of this email through GitHub or a one-time code.
+      let user = this.ctx.storage.sql.exec<{ id: string; email: string; name: string }>('SELECT id, email, name FROM profiles WHERE email = ?', external.email).toArray()[0];
+      if (!user) {
+        user = { id: crypto.randomUUID(), email: external.email, name: external.name };
+        this.ctx.storage.sql.exec('INSERT INTO profiles (id, email, name) VALUES (?, ?, ?)', user.id, user.email, user.name);
+      }
+      this.ctx.storage.sql.exec('INSERT INTO external_accounts (external_id, user_id) VALUES (?, ?)', external.id, user.id);
+      return user;
+    });
+  }
+  profileById(id: string): AccountIdentity | null {
+    return this.ctx.storage.sql.exec<{ id: string; email: string; name: string }>('SELECT id, email, name FROM profiles WHERE id = ?', id).toArray()[0] ?? null;
+  }
+  async challenge(id: string, value: string, expires: number) {
+    this.ctx.storage.sql.exec('INSERT INTO challenges (id, value, expires) VALUES (?, ?, ?)', id, value, expires);
+    await this.scheduleCleanup();
+  }
+  takeChallenge(id: string): string | null {
+    return this.ctx.storage.transactionSync(() => {
+      const row = this.ctx.storage.sql.exec<{ value: string; expires: number }>('SELECT value, expires FROM challenges WHERE id = ?', id).toArray()[0];
+      this.ctx.storage.sql.exec('DELETE FROM challenges WHERE id = ?', id);
+      return row && row.expires > Date.now() ? row.value : null;
+    });
+  }
+  verifyEmail(id: string, codeDigest: string): string | null {
+    return this.ctx.storage.transactionSync(() => {
+      const row = this.ctx.storage.sql.exec<{ value: string; expires: number; attempts: number }>('SELECT value, expires, attempts FROM challenges WHERE id = ?', id).toArray()[0];
+      if (!row || row.expires <= Date.now() || row.attempts >= 5) return null;
+      this.ctx.storage.sql.exec('UPDATE challenges SET attempts = attempts + 1 WHERE id = ?', id);
+      const value = JSON.parse(row.value) as { kind: string; email: string; digest: string };
+      if (value.kind !== 'email' || value.digest !== codeDigest) return null;
+      this.ctx.storage.sql.exec('DELETE FROM challenges WHERE id = ?', id);
+      return value.email;
+    });
+  }
+  passkeys(userId: string): StoredPasskey[] {
+    return this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM passkeys WHERE user_id = ?', userId).toArray().map(row => JSON.parse(row.value));
+  }
+  passkey(id: string): StoredPasskey | null {
+    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM passkeys WHERE id = ?', id).toArray()[0];
+    return row ? JSON.parse(row.value) : null;
+  }
+  addPasskey(key: StoredPasskey): boolean {
+    if (this.passkeys(key.userId).length >= 10 || this.passkey(key.id)) return false;
+    this.ctx.storage.sql.exec('INSERT INTO passkeys (id, user_id, value) VALUES (?, ?, ?)', key.id, key.userId, JSON.stringify(key));
+    return true;
+  }
+  advancePasskey(id: string, prior: number, counter: number): boolean {
+    const key = this.passkey(id);
+    if (!key || key.counter !== prior || counter < prior) return false;
+    key.counter = counter;
+    this.ctx.storage.sql.exec('UPDATE passkeys SET value = ? WHERE id = ?', JSON.stringify(key), id);
+    return true;
+  }
+  removePasskey(userId: string, id: string) { this.ctx.storage.sql.exec('DELETE FROM passkeys WHERE id = ? AND user_id = ?', id, userId); }
+  async startDevice(hash: string, code: string, label: string, scope: AgentScope) {
+    this.ctx.storage.sql.exec("INSERT INTO devices (digest, code, label, scope, expires, status) VALUES (?, ?, ?, ?, ?, 'pending')", hash, code, label, scope, Date.now() + 600_000);
+    await this.scheduleCleanup();
+  }
+  device(code: string): { label: string; scope: AgentScope; expires: number } | null {
+    return this.ctx.storage.sql.exec<{ label: string; scope: AgentScope; expires: number }>("SELECT label, scope, expires FROM devices WHERE code = ? AND status = 'pending' AND expires > ?", code, Date.now()).toArray()[0] ?? null;
+  }
+  approveDevice(code: string, grant: AgentGrant): boolean {
+    const request = this.device(code);
+    if (!request || (grant.scope !== 'read' && grant.scope !== request.scope)) return false;
+    this.ctx.storage.sql.exec("UPDATE devices SET status = 'approved', grant_value = ? WHERE code = ?", JSON.stringify({ ...grant, label: request.label }), code);
+    return true;
+  }
+  denyDevice(code: string) { this.ctx.storage.sql.exec("UPDATE devices SET status = 'denied' WHERE code = ? AND status = 'pending'", code); }
+  takeDevice(hash: string): { status: string; grant: string | null } {
+    return this.ctx.storage.transactionSync(() => {
+      const row = this.ctx.storage.sql.exec<{ expires: number; polled: number; status: string; grant_value: string | null }>('SELECT expires, polled, status, grant_value FROM devices WHERE digest = ?', hash).toArray()[0];
+      if (!row || row.expires <= Date.now() || row.status === 'consumed') return { status: 'expired', grant: null };
+      if (row.polled > Date.now() - 5000) return { status: 'slow_down', grant: null };
+      this.ctx.storage.sql.exec('UPDATE devices SET polled = ? WHERE digest = ?', Date.now(), hash);
+      if (row.status !== 'approved') return { status: row.status, grant: null };
+      this.ctx.storage.sql.exec("UPDATE devices SET status = 'consumed', grant_value = NULL WHERE digest = ?", hash);
+      return { status: 'approved', grant: row.grant_value };
+    });
+  }
+  async issueAgent(hash: string, grant: AgentGrant) {
+    this.ctx.storage.sql.exec('INSERT INTO agent_grants (digest, id, user_id, value, expires) VALUES (?, ?, ?, ?, ?)', hash, grant.id, grant.user.id, JSON.stringify(grant), grant.expires);
+    await this.scheduleCleanup();
+  }
+  agent(hash: string): AgentGrant | null {
+    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM agent_grants WHERE digest = ? AND expires > ?', hash, Date.now()).toArray()[0];
+    return row ? JSON.parse(row.value) : null;
+  }
+  agents(userId: string): Omit<AgentGrant, 'user'>[] {
+    return this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM agent_grants WHERE user_id = ? AND expires > ?', userId, Date.now()).toArray().map(row => {
+      const { user: _user, ...grant } = JSON.parse(row.value) as AgentGrant; return grant;
+    });
+  }
+  revokeAgent(userId: string, id: string) {
+    this.ctx.storage.transactionSync(() => {
+      const grant = this.ctx.storage.sql.exec<{ expires: number }>('SELECT expires FROM agent_grants WHERE user_id = ? AND id = ?', userId, id).toArray()[0];
+      if (!grant) return;
+      this.ctx.storage.sql.exec('DELETE FROM agent_grants WHERE user_id = ? AND id = ?', userId, id);
+      // Cover issued tokens and any exchange already in flight, whose expiry is bounded by this grant.
+      this.ctx.storage.sql.exec('INSERT OR REPLACE INTO compromised_grants (id, expires) VALUES (?, ?)', id, Math.max(grant.expires, Date.now() + ACCESS_LIFETIME));
+    });
+  }
+  /** A matched live token revokes its entire connection, including already minted access tokens, across workspaces. */
+  async revokeLeakedToken(token: string): Promise<{ id: string; workspaceId: string } | null> {
+    // An access token names its grant; any other secret is looked up by its digest.
+    const claims = await verifyAccess(this.env, token);
+    const grant = claims ? { id: claims.grant, workspaceId: claims.workspace, expires: claims.exp } : this.agent(await digest(token));
+    if (!grant || this.accessRevoked(grant.id)) return null;
+    this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec('DELETE FROM agent_grants WHERE id = ?', grant.id);
+      this.ctx.storage.sql.exec('INSERT OR REPLACE INTO compromised_grants (id, expires) VALUES (?, ?)', grant.id, Math.max(grant.expires, Date.now() + 300_000));
+      this.ctx.storage.sql.exec("INSERT INTO security_audit (action, target, workspace_id, created_at) VALUES ('agent.secret-revoked', ?, ?, ?)", grant.id, grant.workspaceId, now());
+    });
+    if (this.env.DIRECTORY) await directoryOf(this.env).repositorySecurityEvent(grant.workspaceId, 'agent.secret-revoked', grant.id);
+    return { id: grant.id, workspaceId: grant.workspaceId };
+  }
+  accessRevoked(grant: string): boolean {
+    return this.ctx.storage.sql.exec('SELECT id FROM compromised_grants WHERE id = ? AND expires > ?', grant, Date.now()).toArray().length > 0;
+  }
+  /*
+   * Model provider keys, sealed per person and provider (worker/agents/providers.ts). Keys are checked with the provider
+   * here and lent only to model calls of their owner's hosted runs; no method returns one to a caller outside Braid.
+   */
+  private providerKeys = new ProviderStore(this.ctx.storage.sql, this.env);
+  providers(userId: string): ProviderConnection[] { return this.providerKeys.list(userId); }
+  async connectProvider(userId: string, provider: ProviderId, key: string): Promise<{ ok: true; connection: ProviderConnection } | Refusal> {
+    try {
+      const { models, model, limits } = await checkProviderKey(provider, key);
+      return { ok: true, connection: await this.providerKeys.save(userId, provider, key, models, model, limits) };
+    } catch (error) {
+      logFailure('provider_key_refused', error, { provider });
+      return { ok: false, ...keyRefusal(provider, error) };
+    }
+  }
+  /** Asks the provider about the saved key again, for its owner. */
+  async checkProvider(userId: string, provider: ProviderId): Promise<ProviderConnection | null> {
+    const key = await this.providerKeys.key(userId, provider);
+    if (key === null) return null;
+    try {
+      const { models, limits } = await checkProviderKey(provider, key);
+      return this.providerKeys.checked(userId, provider, { ok: true, limits }, models);
+    } catch (error) {
+      logFailure('provider_key_refused', error, { provider });
+      return this.providerKeys.checked(userId, provider, { ok: false, code: error instanceof ProviderFailure ? error.code : 'unavailable' });
+    }
+  }
+  chooseProviderModel(userId: string, provider: ProviderId, model: string): { ok: true; connection: ProviderConnection } | Refusal {
+    try { return { ok: true, connection: this.providerKeys.chooseModel(userId, provider, model) }; }
+    catch (error) { return refused(error, 500, 'The model could not be saved.'); }
+  }
+  disconnectProvider(userId: string, provider: ProviderId) { this.providerKeys.remove(userId, provider); }
+  /** What a new task with this person's provider runs; an error says how to connect it. */
+  providerChoice(userId: string, provider: ProviderId): { ok: true; model: string; version: string } | { ok: false; error: string } {
+    try { return { ok: true, ...this.providerKeys.choice(userId, provider) }; }
+    catch (error) { return { ok: false, error: refused(error).error }; }
+  }
+  leaseProvider(ref: HostedProvider) { return this.providerKeys.lease(ref); }
+  recordProviderUse(ref: HostedProvider, outcome: ProviderOutcome) { this.providerKeys.record(ref, outcome); }
+  async consume(key: string, limit: number, windowMs: number): Promise<{ allowed: boolean; retryAfter: number }> {
+    const result = this.ctx.storage.transactionSync(() => {
+      const time = Date.now();
+      const row = this.ctx.storage.sql.exec<{ used: number; expires: number }>('SELECT used, expires FROM budgets WHERE key = ?', key).toArray()[0];
+      if (row && row.expires > time && row.used >= limit) return { allowed: false, retryAfter: Math.ceil((row.expires - time) / 1000) };
+      const expires = row && row.expires > time ? row.expires : time + windowMs;
+      const used = row && row.expires > time ? row.used + 1 : 1;
+      this.ctx.storage.sql.exec('INSERT INTO budgets (key, used, expires) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET used = excluded.used, expires = excluded.expires', key, used, expires);
+      return { allowed: true, retryAfter: 0 };
+    });
+    await this.scheduleCleanup();
+    return result;
+  }
+  /** An address shares a budget, never a session: separate browsers on one network must not share comments or decisions. */
+  async exampleSession(address: string, token: string, limit: number, windowMs: number): Promise<{ token: string } | { retryAfter: number }> {
+    const budget = await this.consume(`demo:${address}`, limit, windowMs);
+    return budget.allowed ? { token } : { retryAfter: budget.retryAfter };
+  }
+  private async scheduleCleanup() {
+    if (await this.ctx.storage.getAlarm() === null) await this.ctx.storage.setAlarm(Date.now() + 86_400_000);
+  }
+  async alarm() {
+    const time = Date.now();
+    for (const table of ['sessions', 'compromised_grants', 'budgets', 'oauth', 'challenges', 'devices', 'agent_grants', 'github_imports'])
+      this.ctx.storage.sql.exec(`DELETE FROM ${table} WHERE expires <= ?`, time);
+    this.ctx.storage.sql.exec('DELETE FROM identities WHERE digest NOT IN (SELECT digest FROM sessions)');
+    const remaining = this.ctx.storage.sql.exec<{ count: number }>('SELECT (SELECT COUNT(*) FROM sessions) + (SELECT COUNT(*) FROM budgets) + (SELECT COUNT(*) FROM oauth) + (SELECT COUNT(*) FROM challenges) + (SELECT COUNT(*) FROM devices) + (SELECT COUNT(*) FROM agent_grants) + (SELECT COUNT(*) FROM github_imports) AS count').one().count;
+    if (remaining) await this.ctx.storage.setAlarm(Date.now() + 86_400_000);
+  }
+}
+
+/** Why a provider refused a key someone is connecting, in Braid's words. */
+function keyRefusal(provider: ProviderId, error: unknown): { status: number; error: string } {
+  const name = PROVIDERS[provider].name;
+  if (error instanceof HttpError) return { status: error.status, error: error.message };
+  const code = error instanceof ProviderFailure ? error.code : 'unavailable';
+  if (code === 'auth') return { status: 400, error: `${name} rejected this key. Check that you pasted the whole key and that it is active.` };
+  if (code === 'forbidden') return { status: 400, error: `${name} accepted the key but refused to list its models. Give the key permission to use models.` };
+  if (code === 'quota') return { status: 400, error: `${name} reports no credit for this key. Add credit, then connect again.` };
+  if (code === 'rate_limit') return { status: 429, error: `${name} is rate-limiting this key. Try again in a minute.` };
+  // Anthropic answers 400 to a key that can act on several workspaces without naming one, and to a workspace at its spend limit.
+  if (provider === 'anthropic' && code === 'invalid' && error instanceof ProviderFailure && error.status === 400)
+    return { status: 400, error: 'Anthropic refused requests from this key. Use a key created inside a workspace, and check that workspace’s spend limit.' };
+  if (code === 'invalid') return { status: 502, error: `${name} answered in a way Braid could not read. Try again shortly.` };
+  return { status: 502, error: `${name} could not be reached. Try again shortly.` };
+}

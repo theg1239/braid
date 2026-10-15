@@ -1,0 +1,11 @@
+node_modules/
+.cloudflare/
+dist/
+.dev.vars*
+.env*
+!.env.example
+*.log
+.DS_Store
+coverage/
+
+public/source/

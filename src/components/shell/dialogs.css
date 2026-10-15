@@ -1,0 +1,50 @@
+/* Command palette rows. */
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.palette-item__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--fg-3);
+}
+
+.palette-item__title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.palette-item__hint {
+  flex: none;
+  margin-left: auto;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.palette-item__keys {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.palette-item__hint + .palette-item__keys {
+  margin-left: 0;
+}
+
+.palette-keys {
+  display: flex;
+  gap: 16px;
+}
+
+.palette-keys > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+

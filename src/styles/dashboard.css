@@ -1,0 +1,313 @@
+/*
+ * The dashboard: what needs the person and the latest merges, beside their teams' repositories.
+ * Colour for state only: the one icon at the start of a pull request row and its label.
+ */
+
+.dash {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 36px 64px;
+  max-width: calc(1120px + 2 * var(--page-x));
+  padding-top: 40px;
+}
+
+.dash--first {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dash__head {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.dash__title {
+  margin-right: auto;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.02em;
+}
+
+.dash__main {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+
+.dash__side {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+
+.dash__h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dash__count {
+  color: var(--fg-3);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash__when {
+  margin-top: 1px;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr__repo {
+  margin-right: 5px;
+  color: var(--fg-2);
+}
+
+.dash__calm {
+  padding: 14px 16px;
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+/* The repositories, grouped by team. */
+.dash__team + .dash__team {
+  margin-top: 22px;
+}
+
+.dash__team-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dash__role {
+  color: var(--fg-4);
+  font-weight: 400;
+}
+
+.dash__repos {
+  display: flex;
+  flex-direction: column;
+}
+
+.dash__repo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+
+.dash__repo--empty {
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+.dash__repo-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dash__repo-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dash__repo-owner {
+  color: var(--fg-3);
+  font-weight: 400;
+}
+
+.dash__repo-meta {
+  display: inline-flex;
+  flex: none;
+  min-width: 88px;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.dash__repo-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash__quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: var(--fg-3);
+  font-size: 13px;
+  transition: color 0.15s;
+}
+
+.dash__quiet:hover {
+  color: var(--fg);
+}
+
+.dash__example {
+  display: flex;
+  margin-top: 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+/* First run: one column, centred, with the one way to start. */
+.dash__first {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 420px;
+  margin: 64px auto 0;
+  text-align: center;
+}
+
+.dash__first-icon {
+  margin-bottom: 10px;
+  color: var(--fg-3);
+}
+
+.dash__first-title {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: -0.02em;
+}
+
+.dash__first-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+@media (max-width: 920px) {
+  .dash {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+    padding-top: 28px;
+  }
+}
+
+@media (max-width: 560px) {
+  .dash__title {
+    font-size: 22px;
+  }
+
+  .dash .pr {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .dash .pr__main {
+    display: flex;
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .dash .dash__when {
+    grid-column: 2;
+    margin-top: 0;
+  }
+}
+
+.dash__claim:empty { display: none; }
+
+/* This short inbox does not need the repository list's offscreen rendering shortcut. */
+.dash .pr {
+  content-visibility: visible;
+}
+
+.dash .pr__title,
+.dash .pr__meta {
+  overflow-wrap: anywhere;
+}
+
+.dash__row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+
+.dash__author {
+  display: block;
+}
+
+.dash__state {
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.dash__section--merged .pr {
+  padding-top: 7px;
+  padding-bottom: 8px;
+}
+
+.dash__period {
+  margin-left: auto;
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.dash__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+
+.dash__error p {
+  flex: 1;
+}
+
+.dash__error a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dash__more {
+  margin-top: 8px;
+}
+
+@media (max-width: 767px) {
+  .dash :is(button, a) { min-width: 32px; min-height: 32px; }
+  .dash .pr__title, .dash__repo-name, .dash__team-name a { display: inline-flex; align-items: center; }
+  .dash__repo-name { white-space: normal; overflow-wrap: anywhere; }
+  .dash__repo-name a { display: inline-flex; align-items: center; }
+}

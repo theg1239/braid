@@ -1,0 +1,272 @@
+/*
+ * Files changed on a pull request: the bar above, the file tree on the left and one section per
+ * file on the right, as GitHub lays it out. Section headers stay in view while their diff scrolls.
+ */
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.files-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+
+.files-bar__tree {
+  display: none;
+}
+
+.files-bar__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.files-bar__style {
+  margin-left: auto;
+}
+
+.files-bar__group { min-width: 90px; }
+.fgroup { min-width: 0; }
+.fgroup__summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-box); background: var(--sunken); cursor: pointer; list-style: none; font-size: 13px; }
+.fgroup__summary::-webkit-details-marker { display: none; }
+.fgroup__caret { color: var(--fg-3); }
+.fgroup[open] > .fgroup__summary .fgroup__caret { transform: rotate(90deg); }
+.fgroup > .fsecs { margin-top: 14px; }
+
+.files-layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+/* ---------- Tree ---------- */
+
+.ftree-pane {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100dvh - 32px);
+  /* A scrolling pane clips on every side; the room keeps the filter's ring whole without moving anything. */
+  margin: -3px;
+  padding: 3px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.ftree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ftree__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding-right: 8px;
+  border-radius: 6px;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.ftree__item:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.ftree__file[aria-current] {
+  background: var(--selected);
+  color: var(--fg);
+}
+
+.ftree__file[data-viewed] .ftree__name {
+  color: var(--fg-3);
+}
+
+.ftree__file[data-deleted] .ftree__name {
+  text-decoration: line-through;
+}
+
+.ftree__summary {
+  list-style: none;
+}
+
+.ftree__summary::-webkit-details-marker {
+  display: none;
+}
+
+.ftree__caret {
+  flex: none;
+  color: var(--fg-3);
+  transition: transform 0.15s var(--ease-out);
+}
+
+.ftree__dir[open] > .ftree__summary .ftree__caret {
+  transform: rotate(90deg);
+}
+
+.ftree__icon {
+  flex: none;
+  color: var(--fg-3);
+}
+
+.ftree__icon--dir {
+  color: var(--info);
+}
+
+.ftree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ftree__stats {
+  flex: none;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 11px;
+}
+
+/* ---------- Sections ---------- */
+
+.fsecs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.fsec {
+  overflow: clip;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+  scroll-margin-top: 12px;
+}
+
+.fsec__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 5px 12px 5px 6px;
+  border-bottom: 1px solid transparent;
+  background: var(--sunken);
+}
+
+.fsec[data-open] .fsec__head {
+  border-bottom-color: var(--line);
+}
+
+.fsec__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 6px;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.fsec__toggle:hover {
+  background: var(--hover);
+}
+
+.fsec__toggle:focus-visible {
+  outline-offset: -2px;
+}
+
+.fsec__caret {
+  flex: none;
+  color: var(--fg-3);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.fsec[data-open] .fsec__caret {
+  transform: rotate(90deg);
+}
+
+.fsec__path {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fsec__dir {
+  color: var(--fg-3);
+}
+
+.fsec[data-deleted] .fsec__path {
+  text-decoration: line-through;
+  text-decoration-color: var(--fg-3);
+}
+
+.fsec__note {
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.fsec__viewed {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.fsec__body {
+  min-width: 0;
+}
+
+/* ---------- Narrow screens: the tree folds behind a button ---------- */
+
+@media (max-width: 900px) {
+  .files-bar__tree {
+    display: inline-flex;
+  }
+
+  .files-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ftree-pane {
+    display: none;
+    position: static;
+    max-height: none;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-box);
+    background: var(--panel);
+  }
+
+  .files-layout[data-tree-open] .ftree-pane {
+    display: block;
+  }
+}
+
+@media (max-width: 560px) {
+  .fsec__head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 10px;
+  }
+
+  .fsec__note,
+  .fsec__stats {
+    display: none;
+  }
+}
+.line-conversations, .file-conversations { padding: 12px; display: grid; gap: 10px; min-width: 0; font-family: var(--font-sans, sans-serif); }
+.line-conversations > .review-composer { margin: 0; }
+@media (max-width: 600px) { .line-conversations, .file-conversations { padding: 8px; } }

@@ -1,0 +1,367 @@
+/* The Guide tab of a pull request: before and after on top, chapters on the left, the chapter's code on the right. */
+
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.guide__intro {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+  min-height: 84px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+.guide__side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.guide__side h2 {
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.guide__side p {
+  color: var(--fg);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.guide__layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+/* ---------- Chapters ---------- */
+
+.guide__chapters {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: calc(100dvh - 32px);
+  margin: -3px;
+  padding: 3px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.guide__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide__chapter {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.guide__chapter:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.guide__chapter[aria-current] {
+  background: var(--selected);
+  color: var(--fg);
+}
+
+.guide__chapter:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.guide__num {
+  flex: none;
+  min-width: 16px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.guide__chapter[aria-current] .guide__num {
+  color: var(--fg);
+}
+
+.guide__chapter-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.guide__chapter-title {
+  font-weight: 500;
+}
+
+.guide__chapter-note {
+  overflow: hidden;
+  color: var(--fg-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide__fold {
+  margin-top: 6px;
+}
+
+.guide__fold-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--fg-2);
+  font-size: 13px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.guide__fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.guide__fold-summary:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.guide__fold-summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.guide__fold-summary .tab-count {
+  margin-left: auto;
+}
+
+.guide__fold-caret {
+  color: var(--fg-3);
+  transform: rotate(-90deg);
+  transition: transform 0.15s;
+}
+
+.guide__fold[open] .guide__fold-caret {
+  transform: none;
+}
+
+.guide__fold > .guide__list {
+  padding-left: 10px;
+}
+
+.guide__by {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 0;
+  font-size: 12px;
+}
+
+.guide__model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide__keys {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--fg-3);
+}
+
+.guide__keys kbd {
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ---------- The chapter ---------- */
+
+.guide__code {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.guide__current {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 32px;
+}
+
+.guide__picker {
+  display: none;
+  flex-basis: 100%;
+}
+
+.guide__title {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.guide__title .guide__num {
+  padding-top: 1px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.guide__kind {
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.guide__nav {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.guide__summary {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.guide__file {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+.guide__file-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--sunken);
+  font-size: 12.5px;
+}
+
+.guide__path {
+  overflow: hidden;
+  color: var(--fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide__dir {
+  color: var(--fg-3);
+}
+
+.guide__lines {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The room a chapter's hunks take is held from mount; the viewer draws into it. */
+.guide__diff {
+  --diff-line-height: 20px;
+  display: grid;
+  min-width: 0;
+}
+
+.guide__diff > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.guide__diff-room {
+  overflow: hidden;
+  padding: 8px 16px;
+}
+
+.guide__diff-room .code-skeleton__row {
+  height: 20px;
+}
+
+.guide__diff:has(.guide__diff-render > .code:not(.code--pending)) > .guide__diff-room {
+  visibility: hidden;
+}
+
+.guide__diff-render {
+  position: relative;
+}
+
+.guide__diff-render > .code-skeleton,
+.guide__diff-render > .code--pending {
+  height: 100%;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+.guide__diff-render > .code--pending {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+}
+
+/* ---------- Phones ---------- */
+
+@media (max-width: 900px) {
+  .guide__intro {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .guide__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .guide__chapters {
+    display: none;
+  }
+
+  .guide__picker {
+    display: block;
+  }
+
+  .guide__title {
+    font-size: 15px;
+  }
+}
