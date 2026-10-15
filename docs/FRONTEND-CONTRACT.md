@@ -313,3 +313,5 @@ Organization members can read repositories. Owners and team members with Write g
 MCP uses streamable HTTP at `/mcp`. A client with OAuth needs only the address. Other clients send `Authorization: Bearer <access token>` and `X-Braid-Workspace`. Settings shows this endpoint.
 
 Sign-in, username setup, invitations, agent approval, and OAuth consent use `src/account/`. See [agent onboarding](AGENT-ONBOARDING.md) and [architecture](ARCHITECTURE.md).
+
+GitHub authorization and access changes retain the initiating page, query, and anchor in the server-side one-use flow. Return locations must be local paths.

@@ -196,6 +196,22 @@ describe('GitHub repository connections', () => {
     expect(await f.security.githubConnection(alice.id)).toBeNull();
     expect(f.network).not.toHaveBeenCalled();
   });
+  it.each(['connect', 'install'])('returns %s to the original page including its query and anchor', async kind => {
+    const f = await fixture();
+    const returnTo = '/alice/project/settings?tab=github#connection';
+    const start = await f.call(`/api/github/${kind}`, { body: { returnTo } });
+    expect(start.status).toBe(200);
+    const state = new URL((await start.json() as { url: string }).url).searchParams.get('state');
+    const cookie = start.headers.get('set-cookie')!.split(';')[0];
+    const path = kind === 'connect' ? 'callback?code=test-code' : 'installed?installation_id=11';
+    const result = await f.call(`/api/github/${path}&state=${state}`, { cookie });
+    expect(result.status).toBe(303);
+    expect(result.headers.get('location')).toBe(`https://braid.example${returnTo}`);
+  });
+  it.each(['https://evil.example', '//evil.example', '/\\evil.example', '/\n/evil.example'])('rejects unsafe GitHub return location %j', async returnTo => {
+    const f = await fixture();
+    expect((await f.call('/api/github/install', { body: { returnTo } })).status).toBe(400);
+  });
   it('lists only user-accessible installations and repositories and handles paging', async () => {
     const f = await fixture(); await f.connect();
     expect(await (await f.call('/api/github/installations')).json()).toEqual({ items: [{ id: 11, account: 'acme', kind: 'Organization' }], nextPage: null });

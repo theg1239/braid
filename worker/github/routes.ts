@@ -9,7 +9,7 @@ import { authorization, type GitEndpoint } from '../git/transport';
 import type { RepositoryEntry, RepositoryFile } from '../../shared/repository';
 import { base64Bytes, cookie, cookies, digest, equalSecret, jsonBody } from '../http/auth';
 import { HttpError, unwrap } from '../errors';
-import { githubLink, parse, parseFrom, positiveId, queryNumber } from '../schemas';
+import { githubFlowStart, githubLink, parse, parseFrom, positiveId, queryNumber } from '../schemas';
 import { cachedRepositoryToken, canPush, exchangeGitHubToken, githubApi, githubAppToken, githubConfiguration, githubConfigured, repositoryToken } from './client';
 import { personHandle } from '../repositories/provenance';
 import { TEXT_LIMIT } from '../repositories/repository';
@@ -19,7 +19,7 @@ import type { Authorization } from '../http/authorization';
 import { now } from '../workspace/domain';
 
 const flowCookie = (state: string, request: Request, age = 600) => cookie('braid-github-connect', state, request, age, 'Lax');
-type Flow = { kind: 'connect' | 'install'; user: AccountIdentity; workspaceId: string; sessionDigest: string; verifier: string };
+type Flow = { kind: 'connect' | 'install'; user: AccountIdentity; workspaceId: string; sessionDigest: string; verifier: string; returnTo?: string };
 async function githubOwner(env: BraidEnv, user: AccountIdentity, workspaceId: string): Promise<{ teamId: string }> {
   if (!workspaceId || workspaceId === 'demo') throw new HttpError(400, 'Select a live repository workspace first.');
   return { teamId: unwrap(await directoryOf(env).access(user, workspaceId, true)).teamId };
@@ -51,8 +51,9 @@ async function beginFlow(request: Request, env: BraidEnv, user: AccountIdentity,
   if (new URL(request.url).origin !== config.origin) throw new HttpError(400, 'Connect GitHub from the configured application URL.');
   const session = cookies(request)['braid-session'];
   if (!session) throw new HttpError(401, 'Sign in to connect GitHub.');
+  const { returnTo } = parse(githubFlowStart, await jsonBody(request));
   const state = oauth.generateRandomState(), verifier = oauth.generateRandomCodeVerifier();
-  const flow: Flow = { kind, user, workspaceId, sessionDigest: await digest(session), verifier };
+  const flow: Flow = { kind, user, workspaceId, sessionDigest: await digest(session), verifier, returnTo };
   await securityOf(env).challenge(`github:${await digest(state)}`, JSON.stringify(flow), Date.now() + 600_000);
   const url = new URL(kind === 'connect' ? 'https://github.com/login/oauth/authorize' : `https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`);
   url.searchParams.set('state', state);
@@ -75,8 +76,8 @@ export async function githubReturn(request: Request, env: BraidEnv): Promise<Res
   const user = await security.identity(flow.sessionDigest);
   if (!user || user.id !== flow.user.id) throw new HttpError(401, 'Sign in again before connecting GitHub.');
   await githubOwner(env, user, flow.workspaceId);
-  const target = new URL('/', config.origin);
-  target.searchParams.set('setup', 'github'); target.searchParams.set('workspace', flow.workspaceId);
+  const target = new URL(flow.returnTo ?? '/', config.origin);
+  if (!flow.returnTo) { target.searchParams.set('setup', 'github'); target.searchParams.set('workspace', flow.workspaceId); }
   if (url.searchParams.has('error')) target.searchParams.set('github', 'declined');
   else if (flow.kind === 'connect' && url.pathname === '/api/github/callback') {
     const code = url.searchParams.get('code'), issuer = url.searchParams.get('iss');

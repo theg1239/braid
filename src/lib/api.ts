@@ -384,8 +384,8 @@ export const api = {
   retryImport: (idempotencyKey: string) =>
     workspaceRequest<{ importing: ProjectImport }>('/api/project/import/retry', { method: 'POST', body: '{}', idempotencyKey }),
   githubConnection: () => workspaceRequest<GitHubConnection>('/api/github/connection'),
-  connectGitHub: () => workspaceRequest<{ url: string }>('/api/github/connect', { method: 'POST', body: '{}' }),
-  installGitHub: () => workspaceRequest<{ url: string }>('/api/github/install', { method: 'POST', body: '{}' }),
+  connectGitHub: (returnTo?: string) => workspaceRequest<{ url: string }>('/api/github/connect', { method: 'POST', body: JSON.stringify({ returnTo }) }),
+  installGitHub: (returnTo?: string) => workspaceRequest<{ url: string }>('/api/github/install', { method: 'POST', body: JSON.stringify({ returnTo }) }),
   disconnectGitHub: () => workspaceRequest<{ ok: true }>('/api/github/connection', { method: 'DELETE' }),
   githubInstallations: (page = 1) => workspaceRequest<GitHubPage<GitHubInstallation>>(`/api/github/installations?page=${page}`),
   githubRepositories: (installationId: number, page = 1) => workspaceRequest<GitHubPage<GitHubRepository>>(`/api/github/repositories?installationId=${installationId}&page=${page}`),

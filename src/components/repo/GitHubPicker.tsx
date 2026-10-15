@@ -88,7 +88,8 @@ export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pend
     setBusy(true);
     setError(null);
     try {
-      const result = await (install ? api.installGitHub() : api.connectGitHub());
+      const returnTo = window.location.pathname + window.location.search + window.location.hash;
+      const result = await (install ? api.installGitHub(returnTo) : api.connectGitHub(returnTo));
       window.location.assign(result.url);
     } catch (err) {
       setError(errorMessage(err));

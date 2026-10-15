@@ -437,6 +437,8 @@ const githubSelection = body({
   installationId: positiveId('Choose a GitHub account and repository.'),
   repositoryId: positiveId('Choose a GitHub account and repository.'),
 }, 'Choose a GitHub account and repository.');
+/** A local page to resume after GitHub authorization; never an external redirect. */
+export const githubFlowStart = body({ returnTo: v.optional(v.pipe(v.string(), v.maxLength(4096), v.check(path => path.startsWith('/') && !path.startsWith('//') && !/[\\\x00-\x20]/.test(path), 'Choose a local return page.'))) }, 'Invalid GitHub connection request.');
 export const githubLink = body({ ...githubSelection.entries, mode: v.picklist(['pull-requests', 'mirror'], 'Choose pull requests or mirror.') }, 'Choose a GitHub account and repository.');
 export const project = v.pipe(body({
   name: v.pipe(text('Repository name', 48), v.regex(/^[a-z][a-z0-9-]{1,47}$/, 'Use 2–48 lowercase letters, digits, and hyphens, starting with a letter.')),
