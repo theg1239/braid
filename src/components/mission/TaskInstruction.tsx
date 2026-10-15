@@ -28,7 +28,7 @@ export function TaskInstruction({ mission }: { mission: Mission }) {
   return <form className="task-instruction" onSubmit={send} aria-label="Send task instruction">
     <InputArea label="Instruction" value={message} onValueChange={value => { setMessage(value); setSent(false); }} placeholder="What should the agents do next?" maxLength={4000} minRows={2} maxRows={5} autoResize disabled={!writable || busy} />
     <div className="task-instruction__footer">
-      <span className="quiet" role="status">{sent ? 'Sent. Agents receive this when they next read task context.' : 'Included in the agents’ next task context read.'}</span>
+      <span className="quiet" role="status">{sent ? 'Sent. The agent sees it the next time it checks the task.' : null}</span>
       <Button type="submit" variant="secondary" loading={busy} disabled={!writable || !message.trim()} title={!writable ? readOnlyReason(snapshot, 'send an instruction') : undefined}>Send instruction</Button>
     </div>
     {error ? <Banner variant="error" size="sm" description={error} /> : null}

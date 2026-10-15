@@ -16,7 +16,7 @@ const head = 'a'.repeat(40);
 const owner = { id: 'user:owner', email: 'owner@example.test', name: 'Owner' };
 const ownerHeaders = { 'x-braid-user-id': owner.id, 'x-braid-actor': 'Owner', 'x-braid-workspace': 'workspace-1', 'x-braid-team': 'team-1' };
 const grant = (id: string, extra: Partial<AgentGrant> = {}): AgentGrant => ({ id, user: owner, workspaceId: 'workspace-1', scope: 'work', label: `${id} on MacBook Pro`, expires: Date.now() + 86_400_000, ...extra });
-const connection = (id: string) => ({ 'x-braid-connection': id, 'x-braid-connection-digest': id, 'x-braid-connection-expires': String(Date.now() + 86_400_000) });
+const connection = (id: string) => ({ 'x-braid-connection': id, 'x-braid-connection-digest': id, 'x-braid-connection-expires': String(Date.now() + 86_400_000), 'x-braid-connection-label': encodeURIComponent(`Codex on ${id}-MacBook`) });
 
 async function fixture() {
   const db = storageFixture(); databases.push(db);
@@ -45,24 +45,23 @@ async function fixture() {
 }
 
 describe('assigned task connections', () => {
-  it('creates one slot per selected connection and only lets that connection check out, report and submit', async () => {
+  it('lets any of the owner’s work connections take a lane started for another, and only the one that took it report and submit', async () => {
     const f = await fixture(), id = await f.start(['claude', 'codex']);
     const task = (await f.state()).missions[0];
     expect(task.agents.map(agent => agent.connection?.id)).toEqual(['claude', 'codex']);
     const base = `/api/missions/${id}/agents/${task.agents[0].id}`;
-    expect((await f.request(`${base}/checkout`, {}, connection('other'))).status).toBe(403);
     expect((await f.request(`${base}/checkout`, {})).status).toBe(403);
     expect(f.repo.createToken).not.toHaveBeenCalled();
-    expect((await f.request(`${base}/checkout`, {}, connection('claude'))).status).toBe(200);
+    expect((await f.request(`${base}/checkout`, {}, connection('other'))).status).toBe(200);
+    expect((await f.state()).missions[0].agents[0].connection).toEqual({ id: 'other', label: expect.any(String) });
+    expect((await f.request(`${base}/checkout`, {}, connection('claude'))).status).toBe(409);
     const key = crypto.randomUUID(), body = { message: 'Reading the docs' };
-    expect((await f.request(`${base}/progress`, body, connection('claude'), key)).status).toBe(200);
+    expect((await f.request(`${base}/progress`, body, connection('other'), key)).status).toBe(200);
     expect((await f.request(`${base}/progress`, body, connection('codex'), key)).status).toBe(403);
     const submission = { baseCommit: head, summary: 'Explain setup', rationale: 'Help new contributors', model: 'claude-opus-5-5', files: [{ path: 'docs/setup.md', content: 'Setup\n' }] };
     expect((await f.request(`${base}/submit`, submission, connection('codex'))).status).toBe(403);
-    expect((await f.request(`${base}/submit`, submission, connection('claude'))).status).toBe(200);
+    expect((await f.request(`${base}/submit`, submission, connection('other'))).status).toBe(200);
     expect((await f.state()).missions[0].agents[0]).toMatchObject({ status: 'review', model: 'claude-opus-5-5', completedAt: expect.any(String) });
-    await f.restart();
-    expect((await f.request(`${base}/checkout`, {}, connection('other'))).status).toBe(403);
   });
 
   it.each(['repository', 'owner', 'read', 'fleet', 'expired', 'missing'] as const)('rejects an unavailable %s connection before spending task budget', async kind => {

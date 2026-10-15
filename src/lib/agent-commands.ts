@@ -68,6 +68,11 @@ export function startCommand(missionId: string, agentId?: string): string {
   return `${braidCli()} start "${taskLink(missionId, agentId)}"`;
 }
 
+/** What a person pastes into their coding agent to hand it a task: the start command and where to run it. */
+export function startPrompt(missionId: string, agentId?: string): string {
+  return `Take this Braid task. From the root of this repository's checkout, run:\n${startCommand(missionId, agentId)}\nThen follow what it prints.`;
+}
+
 /**
  * What a connected agent needs to carry its existing checkout onto the new main and submit the
  * same task again. The checkout stays the agent's own and nothing here runs from the browser:

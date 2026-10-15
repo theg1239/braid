@@ -1,23 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Agent, AgentRecord, Mission } from '../../../shared/types';
-import type { AgentConnection } from '../../account/api';
 import { agentKey } from '../../../shared/models';
 vi.mock('../../lib/router', () => ({ paths: {} }));
 vi.mock('../../store/workspace', () => ({ useSnapshot: () => ({ missions: [] }) }));
 vi.mock('../ui/Link', () => ({ RouterLink: () => null }));
 vi.mock('../../lib/live', () => ({ useLive: () => null }));
 vi.mock('../../account/RepositoryGate', () => ({ useRepository: () => ({ scope: 'repo-1' }) }));
-import { taskConnections } from './ConnectedAgents';
 import { runsForAgent } from './AgentRuns';
 import { McpHeaders } from './ConnectAgent';
-
-describe('available task connections', () => {
-  it('shows only current work connections for this repository', () => {
-    const connection: AgentConnection = { id: 'mine', workspaceId: 'repo-1', scope: 'work', label: 'Claude Code on MacBook Pro', expires: 200 };
-    expect(taskConnections([connection, { ...connection, id: 'other', workspaceId: 'repo-2' }, { ...connection, id: 'read', scope: 'read' }, { ...connection, id: 'fleet', scope: 'fleet' }, { ...connection, id: 'expired', expires: 99 }], 'repo-1', 100)).toEqual([connection]);
-  });
-});
 
 describe('fleet task timings', () => {
   it('does not attribute another owner or tool’s time to an agent with the same model', () => {

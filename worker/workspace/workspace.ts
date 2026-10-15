@@ -529,7 +529,7 @@ export class Workspace extends DurableObject<BraidEnv> {
       const actor = personName(parse(actorHeader, request.headers.get('x-braid-actor') || 'You'));
       const ownerValue = request.headers.get('x-braid-owner'), owner = ownerValue ? parse(ownerHeader, ownerValue) : undefined;
       const authorization = request.headers.get('x-braid-team') ? { user: { id: request.headers.get('x-braid-user-id')!, email: actor, name: actor }, workspaceId: request.headers.get('x-braid-workspace')!, teamId: request.headers.get('x-braid-team')!, connectionDigest: request.headers.get('x-braid-connection-digest') || undefined } : undefined;
-      if (localRoute) await this.checkTaskConnection(localRoute[1], localRoute[2], request.headers.get('x-braid-connection'), authorization);
+      if (localRoute) await this.checkTaskConnection(localRoute[1], localRoute[2], request.headers.get('x-braid-connection'), authorization, localRoute[3] === 'checkout');
       if (path === '/api/context' && body.missionId && request.headers.has('x-braid-connection')) throw new HttpError(403, 'Only an owner can send task instructions.');
       const journaled = path === '/api/missions' || path === '/api/project' || path === '/api/project/import/retry' || /^\/api\/missions\/[^/]+\/merge$/.test(path) || localRoute?.[3] === 'submit' || localRoute?.[3] === 'progress' || (path === '/api/context' && !!body.missionId);
       const receipt = journaled ? await this.journal.read(request, body, mode === 'live') : undefined;
@@ -541,7 +541,7 @@ export class Workspace extends DurableObject<BraidEnv> {
       if (localRoute) {
         if (mode !== 'live') throw new HttpError(403, 'Local agents require a live repository.');
         const claimant = request.headers.get('x-braid-connection') || `owner:${request.headers.get('x-braid-user-id') || actor}`;
-        if (localRoute[3] === 'checkout' || localRoute[3] === 'update') return Response.json(await this.checkoutLocal(localRoute[1], localRoute[2], claimant, authorization, Number(request.headers.get('x-braid-connection-expires')) || Date.now() + 3_600_000, localRoute[3] === 'update'));
+        if (localRoute[3] === 'checkout' || localRoute[3] === 'update') return Response.json(await this.checkoutLocal(localRoute[1], localRoute[2], claimant, authorization, Number(request.headers.get('x-braid-connection-expires')) || Date.now() + 3_600_000, localRoute[3] === 'update', decodeURIComponent(request.headers.get('x-braid-connection-label') ?? '') || undefined));
         if (localRoute[3] === 'progress') return Response.json(await this.recordProgress(localRoute[1], localRoute[2], claimant, body, receipt!, authorization));
         return Response.json(await this.submitLocal(localRoute[1], localRoute[2], claimant, body, receipt!, authorization, owner));
       }
@@ -872,7 +872,7 @@ export class Workspace extends DurableObject<BraidEnv> {
     }
     // Hosted lanes go by the model that runs them, and by their focus when several share it.
     const hostedModel = providerModel ?? this.env.AI_MODEL, hosted = modelName(hostedModel);
-    const lanes = execution === 'local' ? agents().slice(0, agentCount).map((agent, index) => ({ ...agent, name: 'Connected agent', ...(connections[index] ? { connection: connections[index] } : {}), model: undefined, role: 'Local coding agent', task: intent, scope: ['*'], summary: '' })) : this.data.capabilities.mode === 'live'
+    const lanes = execution === 'local' ? agents().slice(0, agentCount).map((agent, index) => ({ ...agent, name: 'Local agent', ...(connections[index] ? { connection: connections[index] } : {}), model: undefined, role: 'Local coding agent', task: intent, scope: ['*'], summary: '' })) : this.data.capabilities.mode === 'live'
       ? agentCount === 1
         ? [{ ...agents()[0], name: hosted, model: hostedModel, ...(provider ? { provider: provider.id } : {}), role: 'Coding agent', scope: ['*'], task: 'Complete the requested change, including relevant implementation, tests and documentation. Preserve existing behavior outside the task. Run relevant project checks and report their results.' }]
         : agents().slice(0, agentCount).map(agent => ({ ...agent, name: `${hosted} (${agent.role})`, model: hostedModel, ...(provider ? { provider: provider.id } : {}), scope: ['*'], task: `Complete the requested task with attention to ${agent.role.toLowerCase()}. Run relevant checks.` }))
@@ -1705,14 +1705,15 @@ export class Workspace extends DurableObject<BraidEnv> {
     if (agent.status === 'skipped') throw new HttpError(409, 'The owner closed this lane to review completed work.');
     return { mission, agent };
   }
-  /** Assignment is permanent; expiry or a replayed key never makes a selected slot public. */
-  private async checkTaskConnection(missionId: string, agentId: string, claimant: string | null, authorization?: Authorization) {
+  /** Any of the owner's work connections can check out a lane; once one has, only it reports and submits there. */
+  private async checkTaskConnection(missionId: string, agentId: string, claimant: string | null, authorization: Authorization | undefined, checkout: boolean) {
     const agent = this.mission(missionId).agents.find(candidate => candidate.id === agentId);
     if (!agent?.connection) return;
-    if (agent.connection.id !== claimant || !authorization?.connectionDigest) throw new HttpError(403, 'This task is assigned to a different connection.');
+    if (!checkout && agent.connection.id !== claimant) throw new HttpError(403, 'Check out this task with this connection first.');
+    if (!authorization?.connectionDigest) throw new HttpError(403, 'Take this task with a work connection for this repository.');
     // With a connection digest the check returns the live grant, already matched to this owner and repository.
     const grant = await checkAuthorization(this.env, authorization);
-    if (grant?.id !== claimant || grant.scope !== 'work') throw new HttpError(403, 'Use the assigned work connection for this repository.');
+    if (grant?.id !== claimant || grant.scope !== 'work') throw new HttpError(403, 'Take this task with a work connection for this repository.');
   }
   /** Feedback on the pull request this agent is revising, read with its task context. */
   private async reviewComments(agent: Agent): Promise<{ reviewComments: ChangeComment[]; pullRequest?: PullRequestContext }> {
@@ -1722,7 +1723,7 @@ export class Workspace extends DurableObject<BraidEnv> {
     const { id, number, status, next, dependsOn, waitingOn, outdated, comments } = unwrap(await changeShardOf(this.env, this.repositoryKey, shard).get(agent.change.id));
     return { reviewComments: unresolvedComments(comments ?? []), pullRequest: { id, number, status, next, dependsOn, waitingOn, outdated } };
   }
-  private async checkoutLocal(missionId: string, agentId: string, claimant: string, authorization: Authorization | undefined, expires: number, update = false) {
+  private async checkoutLocal(missionId: string, agentId: string, claimant: string, authorization: Authorization | undefined, expires: number, update = false, label?: string) {
     const { mission, agent } = this.localLane(missionId, agentId);
     if (update && mission.agents.length !== 1) throw new HttpError(409, 'Updating the base requires a task with one coordinating agent.');
     const key = `${missionId}:${agentId}`;
@@ -1746,6 +1747,8 @@ export class Workspace extends DurableObject<BraidEnv> {
       const token = await repo.createToken('read', 600);
       await this.ctx.storage.put(`local-claim:${key}`, { claimant, expires: Math.min(expires, Date.now() + 3_600_000) });
       if (!update && !reviewed) { agent.status = 'working'; agent.startedAt ??= now(); agent.summary = ''; delete agent.error; delete agent.failureStage; }
+      // The owner sees which of their agents took the lane; public reads drop the connection.
+      if (label && claimant !== agent.connection?.id) agent.connection = { id: claimant, label };
       if (!claim) this.event('thinking', `${agent.name} connected`, undefined, missionId, agentId);
       await this.save();
       const input = await this.input(missionId);

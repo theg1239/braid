@@ -201,7 +201,7 @@ When asked to create a task, use setup access to POST /api/missions with {"title
 - For pickup with the CLI, use ${origin}/tasks/<missionId>?workspace=<workspaceId> with a work connection.
 - Cloud execution needs the choice of the person.
 
-The person can assign one to three work connections, and can send instructions while a task runs. Connected agents get them in .braid/TASK.md with resume. Cloudflare agents read them at checkpoints. Setup connections cannot send steering. Follow ${origin}/local-agents.md to do the task, and ${origin}/changes.md to read and reply to pull request comments.
+Any of the person's work connections can take a local task, and the person can send instructions while it runs. Connected agents get them in .braid/TASK.md with resume. Cloudflare agents read them at checkpoints. Setup connections cannot send steering. Follow ${origin}/local-agents.md to do the task, and ${origin}/changes.md to read and reply to pull request comments.
 
 ## Verify
 

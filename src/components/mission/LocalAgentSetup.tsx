@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, DropdownMenu, useKumoToastManager } from '@cloudflare/kumo';
 import { ArrowSquareOutIcon, CopyIcon, DotsThreeIcon, StopCircleIcon } from '@phosphor-icons/react';
 import type { Agent, AgentFailureStage, Mission } from '../../../shared/types';
-import { localAgentGuide, startCommand, updateInstructions } from '../../lib/agent-commands';
+import { localAgentGuide, startPrompt, updateInstructions } from '../../lib/agent-commands';
 import { api } from '../../lib/api';
 import { hasStarted, latestProgress, needsBaseUpdate } from '../../lib/derive';
 import { relativeTime } from '../../lib/format';
@@ -30,17 +30,17 @@ export function AgentError({ agent }: { agent: Agent }) {
 }
 
 /** Older tasks with several lanes need the lane in the link; a single-agent task does not. */
-function commandFor(mission: Mission, agent: Agent): string {
-  return startCommand(mission.id, mission.agents.length > 1 ? agent.id : undefined);
+function promptFor(mission: Mission, agent: Agent): string {
+  return startPrompt(mission.id, mission.agents.length > 1 ? agent.id : undefined);
 }
 
 function guideFor(mission: Mission, agent: Agent | undefined): string {
   return localAgentGuide(mission.id, agent && mission.agents.length > 1 ? agent.id : undefined);
 }
 
-/** Copies the one command an agent runs to take this task. It links to the task and holds no credentials. */
-export function CopyStartCommandButton({ mission, agent }: { mission: Mission; agent: Agent }) {
-  return <CopyButton text={commandFor(mission, agent)} label="Copy command" size="sm" describe={`Copy the start command for ${agent.connection?.label ?? agent.name}`} />;
+/** Copies what to tell an agent to take this task. It links to the task and holds no credentials. */
+export function CopyStartPromptButton({ mission, agent }: { mission: Mission; agent: Agent }) {
+  return <CopyButton text={promptFor(mission, agent)} label="Copy prompt" size="sm" describe={`Copy the prompt for ${agent.name}`} />;
 }
 
 /**
@@ -112,10 +112,10 @@ export function TaskHandoff({ mission }: { mission: Mission }) {
         writable ? (
           <>
             <pre className="task-handoff__code" tabIndex={0}>
-              <code>{commandFor(mission, agent)}</code>
+              <code>{promptFor(mission, agent)}</code>
             </pre>
             <div className="task-handoff__actions">
-              <CopyStartCommandButton mission={mission} agent={agent} />
+              <CopyStartPromptButton mission={mission} agent={agent} />
               <a href={guideFor(mission, agent)} target="_blank" rel="noreferrer" className="text-link">
                 Guide
               </a>
@@ -151,11 +151,10 @@ export function LocalTaskActions({ mission }: { mission: Mission }) {
             <DropdownMenu.Item
               icon={CopyIcon}
               onClick={async () => {
-                const command = commandFor(mission, lane);
-                if (await copy(command, lane.id)) toasts.add({ title: 'Start command copied' });
+                if (await copy(promptFor(mission, lane), lane.id)) toasts.add({ title: 'Prompt copied' });
               }}
             >
-              Copy start command
+              Copy prompt
             </DropdownMenu.Item>
           ) : null}
           <DropdownMenu.Item icon={ArrowSquareOutIcon} onClick={() => window.open(guideFor(mission, lane), '_blank', 'noopener,noreferrer')}>

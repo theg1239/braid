@@ -11,7 +11,7 @@ import { paths } from '../../lib/router';
 import { canWrite, useSnapshot } from '../../store/workspace';
 import { RouterLink } from '../ui/Link';
 import { AgentStatusBadge, Stats } from '../ui/Status';
-import { AgentError, CopyStartCommandButton } from './LocalAgentSetup';
+import { AgentError, CopyStartPromptButton } from './LocalAgentSetup';
 import { Reserve } from './Reserve';
 
 const OUTCOME: Record<VersionOutcome, string> = {
@@ -72,7 +72,7 @@ function AgentRow({ agent, mission, files, selected, now, writable }: { agent: A
             <span className="mono agent-row__hash">{shortHash(agent.commit)}</span>
           </InlineCopyText>
         ) : local && busy && writable ? (
-          <CopyStartCommandButton mission={mission} agent={agent} />
+          <CopyStartPromptButton mission={mission} agent={agent} />
         ) : null}
         {duration !== null ? <span className="agent-row__duration" title="Agent run time">{durationLabel(duration)}</span> : null}
         <Reserve className="agent-row__status" states={[<AgentStatusBadge label="Merged" tone="purple" />]}>

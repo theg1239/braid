@@ -506,6 +506,7 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
     forwarded.headers.set('x-braid-connection', agentConnection.id);
     forwarded.headers.set('x-braid-connection-digest', agentConnection.digest);
     forwarded.headers.set('x-braid-connection-expires', String(agentConnection.expires));
+    forwarded.headers.set('x-braid-connection-label', encodeURIComponent(agentConnection.label));
   }
   const viewer = { canWrite: !publicViewer && !readOnly && agentScope !== 'read' && (!identity || identity.role === 'owner'), ...(identity ? { identity } : {}) };
   // Conditional reads must cover the permission and identity fields added by this gateway.

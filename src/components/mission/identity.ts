@@ -1,8 +1,9 @@
 import type { Agent, Mission } from '../../../shared/types';
-import { modelName } from '../../../shared/models';
+import { modelName, toolName } from '../../../shared/models';
 import { personHandle } from '../../../shared/people';
 
-export const agentName = (agent: Agent): string => agent.model ? modelName(agent.model) : agent.name;
+/** A lane by its model once known, else by the connection that took it (only its owner sees that), else its tool. */
+export const agentName = (agent: Agent): string => agent.model ? modelName(agent.model) : agent.connection?.label ?? (agent.tool ? toolName(agent.tool) : agent.name);
 export function agentByline(agent: Agent): string {
   return `${agentName(agent)}${agent.owner ? ` for ${personHandle(agent.owner)}` : ''}`;
 }
