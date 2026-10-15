@@ -19,3 +19,12 @@ it('does not discard conflicting GitHub identity evidence from an account awaiti
     { name: original.name, github: 'original-login' },
   ]);
 });
+
+it('lists every account for the operator', () => {
+  db = storageFixture();
+  const directory = new Directory(db.ctx, {} as BraidEnv);
+  const person = { id: 'maya', name: 'Maya Chen', email: 'maya@example.test' };
+  directory.account(person);
+  directory.setUsername(person, 'maya-chen');
+  expect(directory.people()).toEqual([expect.objectContaining({ id: 'maya', username: 'maya-chen', name: 'Maya Chen', email: 'maya@example.test', createdAt: expect.any(String) })]);
+});

@@ -734,6 +734,11 @@ export class Directory extends DurableObject<BraidEnv> {
     }
     return { ...owner, workspaces: [...owner.workspaces, ...visible] };
   }
+  /** Every account, oldest first, for the operator. */
+  people() {
+    return this.ctx.storage.sql.exec<{ id: string; username: string | null; name: string; email: string; githubLogin: string | null; createdAt: string | null }>(
+      "SELECT u.id, u.username, u.name, u.email, u.github_login AS githubLogin, MIN(t.created_at) AS createdAt FROM users u LEFT JOIN teams t ON t.user_id = u.id AND t.kind = 'user' GROUP BY u.id ORDER BY createdAt").toArray();
+  }
   async accountView(user: AccountIdentity, github: GitHubIdentity | null = null) {
     const result = this.account(user, github);
     return { ...result, personalOwner: result.personalOwner ? await this.visibleOwner(user.id, result.personalOwner) : null };

@@ -614,6 +614,11 @@ async function accountRoute(request: Request, env: BraidEnv, url: URL, user: Acc
     if (!result.ok) unwrap(result);
     return Response.json(result);
   }
+  if (url.pathname === '/api/operator/people' && request.method === 'GET') {
+    // Only the operator's key, at least 32 characters, reads the account list.
+    if ((env.MIRROR_SEED_TOKEN?.length ?? 0) < 32 || !await equalSecret(request.headers.get('x-braid-operator') ?? '', env.MIRROR_SEED_TOKEN!)) throw new HttpError(404, 'Not found.');
+    return Response.json(await directory.people(), { headers: { 'cache-control': 'no-store' } });
+  }
   const ownerAddress = url.pathname.match(/^\/api\/owners\/([^/]+)$/);
   if (ownerAddress && ['GET', 'HEAD'].includes(request.method)) {
     await anonymousBudget();
