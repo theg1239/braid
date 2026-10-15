@@ -181,7 +181,20 @@ The controlled provider tests do not replace these live checks.
 
 > **Caution:** `scripts/smoke.mjs` writes to an isolated session of the tour. Run it against production only when those writes are allowed. Keep its results separate from real agent runs and real sign-in checks.
 
+## Seed mirrors
+
+An operator can open many GitHub mirrors without the visitor attempt limits.
+
+1. Set `BRAID_MIRROR_SEEDING=1` in `.env.production`.
+2. Put a random `MIRROR_SEED_TOKEN` of 32 characters or more in `.dev.vars.production`.
+3. Deploy.
+4. Send `GET /api/repos/{owner}/{repo}` with the header `x-braid-mirror-seed: <token>` for each repository.
+
+The key skips only the attempt limits. The limit of 1,000 mirrors and the size limits still apply. Send the requests slowly: each new mirror starts an import.
+
 ## Data, backups and rollback
+
+On 2026-10-15, production deleted all of its first state. The deploy retired the first Durable Object classes, and the old Artifacts repositories were deleted. `BRAID_RETIRED_STATE=1` in `.env.production` keeps those tombstones. Do not set it on a new deployment.
 
 - The owner-key repository uses the object `owner-v1`. Public organizations use separate repository objects.
 - When you change the authentication mode, the old data stays. Braid does not import it into an organization.
@@ -192,6 +205,7 @@ To roll back:
 
 1. Keep the previous configuration and owner key private and safe.
 2. Deploy the previous verified source and configuration with `cf`. Do not delete Durable Objects or Artifacts repositories.
+   Do not roll production back to a release from before 2026-10-15. Its Durable Object classes no longer exist.
 3. A rollback of a public deployment must keep its session secret and storage that is compatible with its schema.
 
 A rollback to owner-key mode makes the old owner repository available again. It does not delete the state of public organizations.
