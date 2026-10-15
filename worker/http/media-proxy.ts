@@ -14,11 +14,17 @@ const VIDEO_BYTES = 100 * 1024 * 1024;
 const REDIRECTS = 4;
 export const MEDIA_SANDBOX = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
+/** GitHub shows an image addressed by its file page (`/owner/repo/blob/ref/path`) from that file's raw address, and so does Braid. */
+function githubFile(url: URL): URL {
+  const page = url.hostname === 'github.com' ? /^\/([^/]+)\/([^/]+)\/blob\/(.+)$/.exec(url.pathname) : null;
+  return page ? new URL(`/${page[1]}/${page[2]}/raw/${page[3]}`, url) : url;
+}
+
 export async function mediaProxy(request: Request): Promise<Response> {
   if (!['GET', 'HEAD'].includes(request.method)) throw new HttpError(405, 'Media is only read.');
   // Browsers say where a request comes from; another site may not use Braid to fetch for it.
   if (request.headers.get('sec-fetch-site') !== 'same-origin') throw new HttpError(403, 'Media loads only on Braid pages.');
-  let next = parse(mediaAddress, new URL(request.url).searchParams.get('url'));
+  let next = githubFile(parse(mediaAddress, new URL(request.url).searchParams.get('url')));
   const range = request.headers.get('range');
   let response: Response;
   for (let hop = 0; ; hop++) {

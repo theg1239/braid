@@ -336,7 +336,7 @@ The import bridge accepts only upload-pack and streams GitHub data directly to A
 A README shows images, SVGs and videos as GitHub does. `src/components/code/markdown-html.tsx` reads the README's HTML with a small tokenizer and rebuilds only allowed elements and attributes as React elements. It drops scripts, styles, frames, forms and event attributes.
 
 - A repository file loads from `/api/repository?media=1` at the commit being read.
-- A remote file loads through `/api/media`. The page's content security policy allows images and media only from Braid, so no host that a README names sees the reader.
+- A remote file loads through `/api/media`. The page's content security policy allows images and media only from Braid, so no host that a README names sees the reader. A GitHub file page (`github.com/<owner>/<repo>/blob/<ref>/<path>`) loads from its `raw` address, as on GitHub.
 - Both answers have the policy `default-src 'none'; sandbox`, so an SVG that is opened alone cannot run as Braid.
 - A `<picture>` shows its dark-scheme source. A link to an uploaded GitHub video on a line of its own becomes a player.
 

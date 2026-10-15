@@ -35,6 +35,16 @@ describe('README media proxy', () => {
     expect(network).toHaveBeenCalledTimes(2);
   });
 
+  it('reads an image addressed by its GitHub file page from the raw file, as GitHub does', async () => {
+    const network = vi.fn(async (url: URL) => String(url) === 'https://github.com/openai/codex/raw/main/.github/splash.png'
+      ? new Response(null, { status: 302, headers: { location: 'https://raw.githubusercontent.com/openai/codex/main/.github/splash.png' } })
+      : new Response('png', { headers: { 'content-type': 'image/png' } }));
+    vi.stubGlobal('fetch', network);
+    const answer = await mediaProxy(proxied('https://github.com/openai/codex/blob/main/.github/splash.png'));
+    expect(answer.status).toBe(200);
+    expect(network.mock.calls.map(([url]) => String(url))).toEqual(['https://github.com/openai/codex/raw/main/.github/splash.png', 'https://raw.githubusercontent.com/openai/codex/main/.github/splash.png']);
+  });
+
   it('refuses other sites, other schemes, credentials, redirects off https, and too many redirects', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('x', { headers: { 'content-type': 'image/png' } })));
     expect(await refusal(proxied('https://img.example/a.png', {}))).toBe(403);
