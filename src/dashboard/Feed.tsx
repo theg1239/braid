@@ -16,7 +16,7 @@ import { RelativeTime } from '../components/ui/Time';
 const DAY = 86_400_000;
 const STORIES = 16;
 const PAGE = 30;
-const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+export const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 
 /*
  * What everyone else is building, as the dashboard and Explore show it: the owners active lately as a row of faces,
@@ -80,7 +80,7 @@ export function Posts({ repos, now, first, empty }: { repos: PublicRepositories;
 }
 
 /** The owner's GitHub picture, from GitHub's page for a mirror or the account Braid knows, or an empty circle: Braid never draws a stand-in face. */
-function Avatar({ item, size, eager = false }: { item: RepositoryListing; size: number; eager?: boolean }) {
+export function Avatar({ item, size, eager = false }: { item: RepositoryListing; size: number; eager?: boolean }) {
   const [failed, setFailed] = useState(false);
   const remote = item.showcase?.avatar;
   const src = remote ? `/api/media?${new URLSearchParams({ url: remote })}` : item.owner.avatar ? `/api/owners/${encodeURIComponent(item.owner.slug)}/avatar` : null;

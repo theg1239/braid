@@ -1,0 +1,302 @@
+/*
+ * Explore: one field over a wall of public repositories. Each tile is the repository's picture: one its maintainers
+ * uploaded spans two columns, which is its own shape; the rest are squares with their owner's GitHub face. The only
+ * text on a tile is its name and stars, over a neutral scrim where it sits on a picture.
+ */
+.explore {
+  max-width: calc(1120px + 2 * var(--page-x));
+  padding-top: 48px;
+}
+
+.explore__title {
+  margin-bottom: 24px;
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.explore__find {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.explore__field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: var(--panel-raised);
+  color: var(--fg-3);
+  transition: background-color 160ms var(--ease-out);
+}
+
+.explore__field:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  background: var(--panel);
+}
+
+.explore__field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 17px;
+  outline: none;
+}
+
+.explore__field input::placeholder {
+  color: var(--fg-3);
+}
+
+.explore__field input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.explore__open {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 15px;
+  text-align: left;
+  transition: transform 120ms var(--ease-out);
+}
+
+.explore__open span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.explore__open:active {
+  transform: scale(0.99);
+}
+
+.explore__open:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.explore__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 28px 0 12px;
+}
+
+.explore__sort {
+  display: flex;
+  gap: 18px;
+  font-size: 13px;
+}
+
+.explore__sort a {
+  padding-block: 4px;
+  color: var(--fg-3);
+}
+
+.explore__sort a:hover,
+.explore__sort a[aria-current] {
+  color: var(--fg);
+}
+
+.explore__count {
+  color: var(--fg-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.explore__empty {
+  padding: 24px 0;
+  color: var(--fg-3);
+  font-size: 14px;
+}
+
+/* The wall. Rows are as tall as a square tile; a wide tile fills two columns of one row, so the grid packs densely. */
+.mosaic {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  grid-auto-flow: dense;
+  gap: 6px;
+}
+
+.tile {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--panel-raised);
+}
+
+.tile[data-wide] {
+  grid-column: span 2;
+  aspect-ratio: auto;
+}
+
+.tile--loading {
+  background: var(--sunken);
+}
+
+.tile__link {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.tile__link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: inherit;
+}
+
+.tile__picture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 240ms var(--ease-out), transform 500ms var(--ease-out);
+}
+
+.tile__picture[data-shown] {
+  opacity: 1;
+}
+
+.tile__face {
+  position: absolute;
+  inset: 0 0 36px;
+  display: grid;
+  place-items: center;
+}
+
+.tile__face .avatar {
+  border-radius: 22px;
+  transition: transform 400ms var(--ease-out);
+}
+
+.tile__text {
+  position: absolute;
+  inset: 0 0 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 18px 16px 8px;
+}
+
+.tile__text-name {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tile__text-about {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.tile__link:hover .tile__picture {
+  transform: scale(1.04);
+}
+
+.tile__link:hover .tile__face .avatar {
+  transform: scale(1.06);
+}
+
+.tile__caption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 28px 14px 12px;
+  color: var(--fg);
+  font-size: 13.5px;
+}
+
+/* A scrim under the caption only where it sits on a picture. */
+.tile[data-wide] .tile__caption {
+  background: linear-gradient(to top, oklch(0% 0 0 / 0.72), transparent);
+  color: oklch(100% 0 0);
+}
+
+.tile__name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tile__owner {
+  font-weight: 400;
+  opacity: 0.68;
+}
+
+.tile__stars {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.tile__label {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+}
+
+.explore .load-more {
+  margin-top: 16px;
+}
+
+@media (max-width: 920px) {
+  .explore { padding-top: 32px; }
+  .mosaic { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .explore__title { font-size: 34px; margin-bottom: 18px; }
+  .mosaic { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .tile__face .avatar { width: 64px; height: 64px; }
+  .tile__caption { padding: 24px 10px 9px; font-size: 12.5px; }
+  .tile__owner { display: none; }
+  .tile__text-about { -webkit-line-clamp: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile__picture, .tile__face .avatar, .explore__open { transition: none; }
+}

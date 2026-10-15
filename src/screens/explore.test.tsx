@@ -26,14 +26,16 @@ beforeEach(() => {
 const html = () => renderToStaticMarkup(<ExploreScreen />);
 
 describe('Explore filters', () => {
-  it('has accessible search and sort controls, a labelled example, and no idle result count', () => {
+  it('has one labelled field, sort links, a labelled example, and no idle result count', () => {
     const out = html();
-    expect(out).toContain('aria-label="Search repositories"');
+    expect(out).toContain('Search Braid or open a GitHub repository');
+    expect(out).toContain('role="search"');
     expect(out).toContain('aria-label="Sort repositories"');
-    expect(textOf(out)).toContain('Recently updated');
+    expect(out).toMatch(/href="\/explore" aria-current="page">Recently updated/);
+    expect(out).toContain('href="/explore?sort=name"');
     expect(out).toContain('href="/example/relay"');
     expect(textOf(out)).toContain('Recorded');
-    expect(out).not.toContain('class="explore__count"');
+    expect(textOf(out)).not.toMatch(/\d+ repositor/);
   });
 
   it('restores shared search and sort from the URL and counts all matches across pages', () => {
@@ -42,11 +44,10 @@ describe('Explore filters', () => {
     live.data!.nextCursor = 'next-page';
     const out = html();
     expect(out).toContain('value="past papers"');
-    expect(textOf(out)).toContain('Name');
+    expect(out).toMatch(/href="\/explore\?q=past\+papers&amp;sort=name" aria-current="page">Name/);
     expect(textOf(out)).toContain('42 repositories');
     expect(textOf(out)).toContain('Load more');
     expect(out).not.toContain('href="/example/relay"');
-    expect(out).toContain('href="/acmvit"');
     expect(out).toContain('href="/acmvit/examcooker"');
   });
 
@@ -78,9 +79,17 @@ describe('Explore filters', () => {
   it('deduplicates overlapping rows and the pinned example', () => {
     live.data!.items.push(live.data!.items[0], { owner: { slug: 'example', name: 'Example' }, repo: { slug: 'relay', name: 'Relay' }, updatedAt: '2026-10-11T10:00:00Z' });
     const out = html();
-    // Each post links its picture and its name, once per repository.
-    expect(out.match(/<li class="post"/g)).toHaveLength(2);
-    expect(out.match(/href="\/acmvit\/examcooker"/g)).toHaveLength(2);
-    expect(out.match(/href="\/example\/relay"/g)).toHaveLength(2);
+    expect(out.match(/<li class="tile"/g)).toHaveLength(2);
+    expect(out.match(/href="\/acmvit\/examcooker"/g)).toHaveLength(1);
+    expect(out.match(/href="\/example\/relay"/g)).toHaveLength(1);
+  });
+});
+
+describe('Explore opens GitHub repositories', () => {
+  it('turns a pasted GitHub address into an Open action instead of a search', () => {
+    query = new URLSearchParams('q=https://github.com/openai/codex/blob/main/README.md');
+    const out = html();
+    expect(textOf(out)).toContain('Open openai/codex');
+    expect(out).toContain('class="explore__open"');
   });
 });

@@ -1092,7 +1092,3 @@
 .commit-bar--mirror .commit-bar__right { flex: none; }
 @media (max-width: 560px) { .commit-bar--mirror .commit-bar__author { max-width: none; } }
 
-@media (max-width: 767px) {
-  .explore .repo-row__name { display: flex; flex-wrap: wrap; align-items: center; overflow-wrap: anywhere; }
-  .explore .repo-row__name a, .explore a.repo-row__name { display: inline-flex; align-items: center; min-width: 32px; min-height: 32px; }
-}

@@ -1,60 +1,11 @@
 /*
- * The site's pages outside a repository: the dashboard (dashboard.css) and Explore. The landing
+ * The site's pages outside a repository: the dashboard (dashboard.css) and Explore (explore.css). The landing
  * page's measure of 1120px, plain section titles over bordered lists.
  */
 
 /* The header keeps the landing page's measure on these pages, so the mark and the content line up. */
 .app--site .site-head__bar {
   max-width: calc(1120px + 2 * var(--page-x));
-}
-
-/* ---------- Explore ---------- */
-
-.explore__open { margin-bottom: 32px; }
-.explore__try { display: flex; gap: 24px; font-size: 13px; }
-.explore__try a { padding-block: 4px; color: var(--fg-2); }
-.explore__try a:hover { text-decoration: underline; text-underline-offset: 3px; }
-.explore__try a span { color: var(--fg-3); }
-.explore__swap { margin-top: 12px; font-size: 12px; color: var(--fg-3); }
-@media (max-width: 560px) {
-  .explore__try { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .explore__try a { min-height: 44px; }
-  .explore__try a span { display: block; }
-}
-
-.explore {
-  max-width: calc(1120px + 2 * var(--page-x));
-  padding-top: 40px;
-}
-
-.explore__head {
-  margin-bottom: 20px;
-}
-
-.explore__title {
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 34px;
-  letter-spacing: -0.03em;
-}
-
-.explore__filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.explore__search {
-  flex: 1;
-  min-width: min(240px, 100%);
-}
-
-.explore__count {
-  margin-bottom: 12px;
-  color: var(--fg-3);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
 }
 
 .repo-row {
@@ -129,9 +80,6 @@
 /* ---------- Narrower screens ---------- */
 
 @media (max-width: 920px) {
-  .explore {
-    padding-top: 28px;
-  }
 }
 
 @media (max-width: 560px) {
