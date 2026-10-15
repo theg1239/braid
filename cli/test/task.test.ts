@@ -118,7 +118,7 @@ describe('braid task start', () => {
     }
   });
 
-  it('asks the owner to approve a connection when none is saved, then starts', async () => {
+  it('asks for email when signed out and starts after an explicit link approval', async () => {
     const f = fixture();
     const env = { ...f.env, BRAID_ACCESS_TOKEN: '', BRAID_WORKSPACE_ID: '' };
     const api = server({
@@ -126,8 +126,12 @@ describe('braid task start', () => {
       'POST /api/agent/token': () => json({ accessToken: CONNECTION, tokenType: 'Bearer', expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(), workspaceId: 'workspace-one', scope: 'work' }),
       'GET /api/state': () => json(snapshot(f.base)), [`POST ${missionPath('checkout')}`]: () => json(details(f.base)),
     });
+    const missing = await braid(['task', 'start', link, '--dir', f.dir], { cwd: f.home, env, fetch: api.fetch });
+    expect(missing.stderr).toContain('run braid login --email ADDRESS');
+    expect(api.sent).toHaveLength(0);
+    const approval = await braid(['login', '--url', origin, '--workspace', 'workspace-one', '--link'], { cwd: f.home, env, fetch: api.fetch });
+    expect(approval.stdout).toContain(`Approve this connection in Braid: ${origin}/?connect=ABCD2345`);
     const result = await braid(['task', 'start', link, '--dir', f.dir], { cwd: f.home, env, fetch: api.fetch });
-    expect(result.stdout).toContain(`Approve this connection in Braid: ${origin}/?connect=ABCD2345`);
     expect(result.stdout).toContain(`Checkout ready at ${f.dir}`);
     expect(result.stdout).not.toContain(CONNECTION);
   });

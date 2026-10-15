@@ -17,7 +17,7 @@ import { agentAuthorization, agentPathAllowed } from './agent-auth';
 import type { AgentScope, Change } from '../../shared/types';
 import type { BraidEnv } from '../env';
 import { handleMcp, type ApiCall } from './mcp';
-import { agentRequest, agentSession, contextNote, parse, project, provenanceQuery, task } from '../schemas';
+import { agentEmailStart, agentEmailVerify, agentGitHubSignup, agentRequest, agentSession, contextNote, parse, project, provenanceQuery, task } from '../schemas';
 import { setupGuide } from './setup-guide';
 import { changesRoute, type ChangeGateway } from '../changes/router';
 import { HttpError } from '../errors';
@@ -69,6 +69,7 @@ describe('guide command contracts', () => {
     ...blocks.filter(command => command.startsWith('node ')).map(command => command.slice('node ~/.braid/braid.mjs '.length)),
     ...inline.map(command => command.replace('node ~/.braid/braid.mjs ', '')),
     'connect --url https://braid.example --workspace ID',
+    'connect --url https://braid.example --repository OWNER/REPO', 'connect --url https://braid.example --link',
     'change start --url https://braid.example --dir NEW_DIRECTORY --workspace ID',
     'change wait --dir DIRECTORY --timeout 60', 'wait --dir DIRECTORY --timeout 60',
     'submit --dir DIRECTORY --tests FILE', 'submit --dir DIRECTORY --depends-on 51,52',
@@ -80,7 +81,7 @@ describe('guide command contracts', () => {
     const exercised = downloaded.join(' ') + ' --push --model -- --help';
     // The other flags belong to the curl installer and the user-selected preview command.
     for (const flag of new Set(text.match(/--[a-z][a-z-]*/g))) {
-      if (!['--create-dirs', '--port'].includes(flag)) expect(exercised, flag).toContain(flag);
+      if (!['--create-dirs', '--port', '--force-with-lease'].includes(flag)) expect(exercised, flag).toContain(flag);
     }
   });
 
@@ -102,7 +103,10 @@ describe('guide command contracts', () => {
       throw new Error('Expected the isolated execution boundary');
     } catch (error) {
       const message = (error as Error).message;
-      if (args[0] === 'connect' || args[0] === 'start') expect(message).toContain('Authorization request failed (HTTP 503)');
+      // Without gh, connect asks for email. Only explicit --link starts browser approval.
+      if (args[0] === 'connect' && args.includes('--code')) expect(message).toContain('No code is waiting for this address.');
+      else if (args[0] === 'connect' && args.includes('--email')) expect(message).toContain('Braid could not email a code: HTTP 503');
+      else if (args[0] === 'connect' || args[0] === 'start') expect(message).toContain(args.includes('--link') ? 'Authorization request failed (HTTP 503)' : 'run connect --email ADDRESS');
       else if (args[0] === 'change' && args[1] === 'start') expect(message).toMatch(/Run connect/);
       else expect(error).toMatchObject({ code: 'ENOENT', path: args[0] === 'submit' ? join(repo.root, '.braid', 'task.json') : join(repo.root, '.braid') });
     }
@@ -197,6 +201,11 @@ describe('guide JSON and scope contracts', () => {
     expect(parse(agentRequest, jsonAfter(auth, '1. POST /api/agent/requests'))).toEqual({ name: 'GPT-6', scope: 'work' });
     expect(parse(agentSession, jsonAfter(auth, '## Short-lived tokens'))).toEqual({ model: 'gpt-6' });
     expect(parse(agentSession, jsonAfter(auth, 'such as'))).toEqual({ name: 'gpt-6:1', model: 'gpt-6' });
+    // The sign-up examples name their secrets with placeholders, which an agent fills in.
+    const filled = (marker: string, placeholder: string, value: string) => JSON.parse(JSON.stringify(jsonAfter(auth, marker)).replace(placeholder, value));
+    expect(parse(agentGitHubSignup, filled('POST /api/agent/github', '<the output of gh auth token>', `gho_${'a'.repeat(36)}`))).toMatchObject({ name: 'GPT-6', scope: 'work' });
+    expect(parse(agentEmailStart, jsonAfter(auth, 'POST /api/agent/email/start'))).toEqual({ email: 'person@example.com', scope: 'work' });
+    expect(parse(agentEmailVerify, filled('POST /api/agent/email/verify', '<the flowId>', crypto.randomUUID()))).toMatchObject({ code: 'ABCD2345', name: 'GPT-6' });
     expect(parse(project, jsonAfter(setup, 'For an empty repository'))).toMatchObject({ name: 'repository-name', sourceUrl: 'https://github.com/owner/public-repository.git' });
     expect(parse(contextNote, jsonAfter(setup, 'POST /api/context:'))).toMatchObject({ kind: 'constraint' });
     expect(parse(task, jsonAfter(setup, 'When asked to create a task'))).toMatchObject({ execution: 'local', agentCount: 1 });

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import api from './api';
+import { MCP_SIGN_IN } from './mcp';
 import type { BraidEnv } from '../env';
 import { Workspace } from '../workspace/workspace';
 import { Security } from '../accounts/security';
@@ -99,7 +100,8 @@ describe('anonymous MCP reads use the public API gateway', () => {
     for (const workspace of ['demo', 'public-repo', 'private-repo']) {
       const response = await mcp({} as BraidEnv, workspace, name);
       expect(response.status).toBe(401);
-      expect(await response.json()).toMatchObject({ error: 'Connect with a Braid access token: send Authorization: Bearer <token> and X-Braid-Workspace with each request. See /auth.md.' });
+      expect(response.headers.get('www-authenticate')).toBe('Bearer scope="work"');
+      expect(await response.json()).toMatchObject({ error: MCP_SIGN_IN });
     }
   });
 

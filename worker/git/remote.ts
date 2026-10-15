@@ -44,13 +44,14 @@ export async function gitRemote(request: Request, env: BraidEnv, gateway: Change
   if (service !== 'git-upload-pack' && service !== 'git-receive-pack') throw new HttpError(400, 'Fetch with git-upload-pack or push with git-receive-pack.');
   if (request.method !== (action === 'info/refs' ? 'GET' : 'POST')) throw new HttpError(405, 'Method not allowed.');
   if (gateway.mode !== 'live') throw new HttpError(404, 'This repository has no Git remote.');
-  if (service === 'git-receive-pack' && gateway.agent?.scope !== 'work') throw new HttpError(403, 'Pushing a change needs a connection with work access.');
+  if (service === 'git-receive-pack' && gateway.agent?.scope !== 'work' && gateway.agent?.scope !== 'setup') throw new HttpError(403, 'Pushing a change needs a connection with work access.');
   const repository = await env.WORKSPACES.getByName(gateway.repository).repository();
   if (!repository) throw new HttpError(409, 'Create or import a repository first.');
   using artifacts = readingNames(await artifactsOf(env).get(repository.id), repository);
   if (action === 'info/refs' && service === 'git-receive-pack') {
     const head = (await artifacts.log({ ref: repository.branch, limit: 1 }))[0]?.hash;
-    if (!head) throw new HttpError(409, 'Main is still preparing. Retry shortly.');
+    if (!head && !await env.WORKSPACES.getByName(gateway.repository).agentInitializationAllowed()) throw new HttpError(409, 'This repository is not ready for its first push.');
+    if (!head) return advertise('git-receive-pack', [['capabilities^{}', ZERO]], RECEIVE_CAPABILITIES);
     const source = await endpoint(artifacts, repository, 'read');
     try {
       const prefix = await uploadPrefix(gateway), { refs } = await advertisement(source, 'git-upload-pack');
@@ -244,6 +245,28 @@ async function push(request: Request, env: BraidEnv, gateway: ChangeGateway, rep
   // Git shows one reason against every ref the push named; the schema guarantees at least one.
   const fail = (error: string) => answer(commands.map(command => ({ ref: command.ref, error })));
   const refuse = async (reason: string) => { await drain(rest); return fail(reason); };
+  if (gateway.agent?.scope === 'setup' || gateway.agent?.scope === 'work' && !repository.head && await env.WORKSPACES.getByName(gateway.repository).agentInitializationAllowed()) {
+    const command = commands[0];
+    const workspace = env.WORKSPACES.getByName(gateway.repository);
+    if (!await workspace.agentInitializationAllowed()) return refuse('This repository is already initialized. Submit work to refs/for/main.');
+    if (commands.length !== 1 || command.ref !== `refs/heads/${repository.branch}` || command.old !== ZERO || command.new === ZERO)
+      return refuse('Setup can only initialize the empty default branch. Submit later work to refs/for/main.');
+    await checkAuthorization(env, gateway.authorization);
+    const source = await endpoint(artifacts, repository, 'write');
+    let large = false;
+    try {
+      const existing = await advertisement(source, 'git-receive-pack');
+      if ([...existing.refs.values()].some(hash => hash !== ZERO)) return refuse('Setup requires an empty repository. Existing history was not overwritten.');
+      // The receiver compares against zero, so simultaneous setup attempts cannot overwrite a winner.
+      await checkAuthorization(env, gateway.authorization);
+      await receive(source, [command], limited(rest, PUSH_BYTES, () => { large = true; }));
+      await workspace.finishAgentInitialization(command.new);
+      return answer([{ ref: command.ref }], ['Repository initialized. Submit subsequent work to refs/for/main.']);
+    } catch (error) {
+      if (error instanceof HttpError) { await drain(rest); throw error; }
+      return fail(large ? PUSH_LIMIT : platformRefusal(error) ?? 'Initialization lost its compare-and-swap or was refused. Reconnect; existing history was not overwritten.');
+    } finally { await revoke(artifacts, source.token); }
+  }
   const upload = commands.length === 1 ? /^refs\/braid\/uploads\/([A-Za-z0-9._-]{1,64})$/.exec(commands[0].ref) : null;
   if (upload) {
     await checkAuthorization(env, gateway.authorization);

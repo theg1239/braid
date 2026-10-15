@@ -339,6 +339,8 @@ export const accessClaims = v.object({
   owner: v.optional(owner), fleet: v.optional(v.string()),
   exp: v.pipe(v.number(), v.finite(), v.check(value => value > Date.now())),
 });
+/** An OAuth access token's claims: an agent's, with the MCP resource it is for and the OAuth client it was issued to. */
+export const mcpAccessClaims = v.object({ ...accessClaims.entries, aud: v.string(), client: v.string() });
 export const actorHeader = v.pipe(v.string(), v.transform(decodeURIComponent));
 export const githubVisibility = v.object({ private: v.boolean() });
 
@@ -540,10 +542,87 @@ export const auditCursor = queryNumber(Number.MAX_SAFE_INTEGER, v.pipe(v.number(
 export const inviteToken = body({ token: v.pipe(v.string('This invitation is not valid.'), v.nonEmpty('This invitation is not valid.'), v.maxLength(200, 'This invitation is not valid.')) }, 'This invitation is not valid.');
 export const emailStart = body({ email }, 'Enter a valid email address.');
 const CODE = 'Enter the code in the browser where you requested it.';
+/** A sign-in code as a person reads it: eight characters, with any spaces or hyphens they type removed. */
+const signInCode = (message: string) => v.pipe(v.string(message), v.transform(value => value.replace(/[\s-]/g, '').toUpperCase()), v.length(8, message));
 export const emailCode = body({
   flowId: v.pipe(v.string(CODE), v.nonEmpty(CODE)),
-  code: v.pipe(v.string(CODE), v.transform(value => value.replace(/[\s-]/g, '').toUpperCase()), v.length(8, CODE)),
+  code: signInCode(CODE),
 }, CODE);
+
+/* ---------- agents that sign themselves up ---------- */
+
+const REPOSITORY_NAME = 'Name the repository as owner/repo.';
+const signupScope = v.optional(v.picklist(['read', 'setup', 'work'], 'Ask for read, setup or work access.'), 'work');
+/** What a self-connecting agent names: itself and, when the person has several repositories, the one to use. */
+const agentSignupTarget = {
+  checkout: v.optional(v.object({ name: v.pipe(v.string(), v.regex(/^[a-z][a-z0-9-]{1,47}$/)), github: v.optional(repositoryAddress) })),
+  name: text('Agent name', 60),
+  repository: v.optional(v.pipe(v.string(REPOSITORY_NAME), v.maxLength(141, REPOSITORY_NAME), v.regex(/^[^/\s]+\/[^/\s]+$/, REPOSITORY_NAME),
+    v.transform(value => { const [owner, repo] = value.split('/'); return { owner, repo }; }), repositoryAddress)),
+  workspaceId: v.optional(workspaceSelection),
+};
+const GITHUB_TOKEN = 'Send the token that gh auth token prints.';
+/** A GitHub token an agent read from the GitHub CLI, used once to read who the person is and then discarded. */
+export const agentGitHubSignup = body({
+  token: v.pipe(v.string(GITHUB_TOKEN), v.regex(/^[\x21-\x7e]{20,255}$/, GITHUB_TOKEN)),
+  scope: signupScope,
+  ...agentSignupTarget,
+}, GITHUB_TOKEN);
+/** The access is fixed when the code is sent, so the email can say what the code allows. */
+export const agentEmailStart = body({ email, scope: signupScope }, 'Enter a valid email address.');
+const AGENT_CODE = 'Send the flowId from the start request and the code the person read in their email.';
+export const agentEmailVerify = body({
+  flowId: v.pipe(v.string(AGENT_CODE), v.uuid(AGENT_CODE)),
+  code: signInCode(AGENT_CODE),
+  ...agentSignupTarget,
+}, AGENT_CODE);
+/** The email GitHub shows on a profile, which GitHub lets a person choose only from their verified addresses. */
+export const githubProfileEmail = v.object({ email: v.nullish(v.pipe(v.string(), v.trim(), v.toLowerCase())) });
+
+/* ---------- OAuth for MCP clients ---------- */
+
+const oauthText = (max: number) => v.pipe(v.string(), v.maxLength(max));
+/** An authorization request (RFC 6749 4.1.1 with PKCE and RFC 8707). Each value is read here; the OAuth checks follow in order. */
+export const oauthAuthorization = v.object({
+  response_type: v.optional(oauthText(40)), client_id: v.optional(oauthText(2048)), redirect_uri: v.optional(oauthText(2048)),
+  code_challenge: v.optional(oauthText(256)), code_challenge_method: v.optional(oauthText(32)), scope: v.optional(oauthText(256)),
+  state: v.optional(oauthText(2048)), resource: v.optional(oauthText(2048)),
+});
+const CONSENT = 'Approve or deny the authorization request.';
+export const oauthConsent = body({
+  request: v.record(v.string(), v.pipe(v.string(), v.maxLength(2048)), CONSENT),
+  decision: v.picklist(['approve', 'deny'], CONSENT),
+  workspaceId: v.optional(workspaceSelection),
+  scope: v.optional(v.picklist(['read', 'work'], 'Choose read or work access.')),
+}, CONSENT);
+const redirectUris = (max: number) => v.pipe(v.array(v.pipe(v.string(), v.maxLength(2048))), v.minLength(1), v.maxLength(max));
+/** Dynamic client registration (RFC 7591). Unlisted metadata is dropped; Braid uses only what it shows and checks. */
+export const oauthRegistration = v.object({
+  redirect_uris: redirectUris(10),
+  client_name: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
+  token_endpoint_auth_method: v.optional(v.picklist(['none', 'client_secret_post', 'client_secret_basic']), 'client_secret_basic'),
+  grant_types: v.optional(v.pipe(v.array(v.picklist(['authorization_code', 'refresh_token'])), v.minLength(1)), ['authorization_code', 'refresh_token']),
+  response_types: v.optional(v.array(v.picklist(['code'])), ['code']),
+});
+/** A client ID metadata document. A document client cannot hold a shared secret, so it authenticates with none. */
+export const oauthClientDocument = v.pipe(v.looseObject({
+  client_id: v.string(),
+  client_name: v.pipe(v.string(), v.trim(), v.nonEmpty(), v.maxLength(200)),
+  redirect_uris: redirectUris(20),
+  token_endpoint_auth_method: v.optional(v.literal('none'), 'none'),
+  grant_types: v.optional(v.array(v.string()), ['authorization_code']),
+  response_types: v.optional(v.array(v.string()), ['code']),
+}), v.check(document => !('client_secret' in document) && !('client_secret_expires_at' in document)));
+const OAUTH_SECRET = v.optional(oauthText(512));
+/** A token request's form: an authorization code with its PKCE verifier, or a refresh token. */
+export const oauthTokenRequest = v.variant('grant_type', [
+  v.object({ grant_type: v.literal('authorization_code'), code: oauthText(512), redirect_uri: oauthText(2048),
+    code_verifier: v.pipe(v.string(), v.regex(/^[A-Za-z0-9._~-]{43,128}$/, 'The code_verifier must be 43–128 unreserved characters.')),
+    client_id: v.optional(oauthText(2048)), client_secret: OAUTH_SECRET, resource: v.optional(oauthText(2048)) }),
+  v.object({ grant_type: v.literal('refresh_token'), refresh_token: oauthText(512),
+    client_id: v.optional(oauthText(2048)), client_secret: OAUTH_SECRET, scope: v.optional(oauthText(256)), resource: v.optional(oauthText(2048)) }),
+]);
+export const oauthRevocation = v.object({ token: oauthText(4096), token_type_hint: v.optional(oauthText(40)), client_id: v.optional(oauthText(2048)), client_secret: OAUTH_SECRET });
 /* A passkey's answer, as @simplewebauthn/server reads it: RegistrationResponseJSON and AuthenticationResponseJSON. */
 const PASSKEY = 'Send the passkey response.', FLOW = 'Start a new passkey request in this browser.';
 /** Base64URL (RFC 4648 section 5), with the optional padding the library accepts. */
@@ -652,3 +731,6 @@ export const orgTeamRepository = body({ permission: v.picklist(['read', 'write']
 export const publicGitFetchLines = v.pipe(v.array(v.pipe(v.string(), v.regex(
   /^(?:want [a-f0-9]{40}(?: [^\r\n\x00]+)?|have [a-f0-9]{40}|shallow [a-f0-9]{40}|deepen [0-9]+|deepen-since [0-9]+|deepen-not [^\s\x00]+|want-ref [^\s\x00]+|filter [^\r\n\x00]+|done|thin-pack|no-progress|include-tag|ofs-delta|deepen-relative|wait-for-done|sideband-all)\n?$/,
   'Unsupported Git fetch argument.'))), v.maxLength(8192, 'Too many Git fetch arguments.'));
+
+/** Anonymous GitHub metadata used only to choose a public import. */
+export const agentPublicSource = v.object({ private: v.boolean(), disabled: v.optional(v.boolean()) });

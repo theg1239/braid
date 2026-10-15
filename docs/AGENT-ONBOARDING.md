@@ -25,7 +25,7 @@ The API uses older names for some things:
 - Clone a public repository from `/<owner>/<repo>.git` after its import finishes. Before that, the address returns HTTP 409. The tour has no clone address.
 - For a public revision, use a plain branch name or a published commit hash. Hidden refs are not available.
 - An import starts one commit deep. The history follows in the background.
-- MCP `initialize` and `tools/list` are public. `tools/call` needs authorization.
+- MCP `initialize` and `tools/list` are public. Read tools also work without a token on a public repository named in `X-Braid-Workspace`. Other `tools/call` requests without a token get HTTP 401, with a `WWW-Authenticate` header that names the OAuth metadata.
 
 The full CLI reads any Git clone without an account:
 
@@ -38,7 +38,7 @@ node braid.mjs blame <file>
 
 ## Connect
 
-You need Node.js 22 or later, and Git.
+`connect` signs the person up or in, and connects the agent to one of their repositories. A person who is new to Braid gets an account on the way. You need Node.js 22 or later, and Git.
 
 1. Set `ORIGIN` to the address of your Braid server.
 2. Download the task CLI to a directory outside your checkout, and connect:
@@ -49,11 +49,18 @@ You need Node.js 22 or later, and Git.
    node ~/.braid/braid.mjs --help
    ```
 
-3. The person opens the link, signs in, selects a repository and approves work access.
+`connect` uses GitHub when signed in and otherwise asks for an email address. A browser approval link is optional:
 
-- A request expires after 10 minutes. The approval can reduce the access to read.
+1. **GitHub CLI.** When `gh` is signed in to github.com, `connect` sends the token from `gh auth token` to Braid once. Braid reads the account by the rules of GitHub sign-in: the immutable GitHub ID, and the GitHub login as the username when it is free. Then Braid discards the token. It never keeps or logs it.
+2. **Email code.** Ask the person for their email address, and run `connect --email ADDRESS`. Braid emails a code that is valid for 10 minutes. Ask the person for the code, and run `connect --email ADDRESS --code CODE`. After 5 wrong codes, ask for a new one.
+3. **Approval link.** The person opens the link, signs in, selects a repository and approves. The request expires after 10 minutes. The approval can reduce the access to read. Only `connect --link` starts this browser flow.
+
+- Run `connect` in the checkout. It infers the GitHub origin or directory name, reuses a writable matching repository, or creates a private repository in the person’s namespace. Public GitHub origins import automatically; other checkouts initialize the empty default branch from committed history with compare-and-swap. Uncommitted files remain local. Use `--repository OWNER/REPO` to override the choice. GitHub’s immutable account ID is sufficient: do not refresh gh email scopes or ask the person to create a repository in the browser. Email-code setup provisions the same way. Subsequent pushes always open changes with `refs/for/main`.
+- Run `connect` only with the Braid address that the person gave you, because the GitHub token goes to that address.
+- The GitHub token or the email code stands in for the approval of the person. The connection gets work access, or the access that the API request asks for, with the limits of an approved connection.
+- Braid accepts 10 GitHub sign-ins in an hour from one network address. Email codes share the limits of browser sign-in.
 - Run `connect` before `change start`.
-- Neither CLI is on npm.
+- Neither CLI is on npm. The full CLI signs in the same way with `braid login` and the same flags.
 
 | Scope | Operations in addition to reads |
 | --- | --- |
@@ -61,9 +68,20 @@ You need Node.js 22 or later, and Git.
 | Work | Submit and revise pull requests, restack, review the work of others, reply to comments, check out tasks, report progress |
 | Fleet | Make a separate work identity for each agent |
 
+### MCP clients
+
+Add `$ORIGIN/mcp` to an MCP client with OAuth, for example Claude Code, Claude.ai, Cursor or VS Code.
+
+1. The client registers itself, or it names its client metadata document.
+2. The browser opens `/oauth/authorize`. The person signs in when necessary.
+3. The page shows the name of the client and where the browser returns. The person selects a repository and Read or Work access, and approves.
+4. The client gets an access token for `/mcp` only. It lasts 1 hour. A refresh token renews it, and each refresh replaces the refresh token.
+
+The connection lasts 30 days after its last use. Settings › Agents shows it with the other connections, and the person can revoke it there. The [architecture](ARCHITECTURE.md#oauth-for-mcp-clients) gives the endpoints.
+
 ### Custom clients
 
-`/auth.md` describes `POST /api/agent/requests`, the owner's approval, and polling `/api/agent/token`.
+`/auth.md` describes the requests for each way: `POST /api/agent/github`, `POST /api/agent/email/start` and `POST /api/agent/email/verify`, and for a link, `POST /api/agent/requests`, the owner's approval and polling `/api/agent/token`.
 
 - The `accessToken` that returns is the **connection credential**. Save it.
 - A work or fleet connection lasts 7 days. A read or setup connection lasts 1 hour.
@@ -134,7 +152,7 @@ Download the full CLI from `/cli/braid-git.mjs`, or build it with `npm ci && npm
 
 ### MCP
 
-1. Send JSON-RPC with `POST` to `/mcp`, with the authorization and repository headers and `Content-Type: application/json`.
+1. Send JSON-RPC with `POST` to `/mcp`, with `Content-Type: application/json`. An MCP client with OAuth sends its own token, which names the repository. Other clients send the authorization and repository headers.
 2. Call `initialize`, then `tools/list` for the schemas.
 3. Read `get_rules`, `get_repository` and `files_in_progress`.
 4. Send `create_pull_request({title,summary,model,base_commit,files})`. Each file has its complete new text, or `null` to delete it.

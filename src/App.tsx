@@ -31,6 +31,7 @@ const newTaskDialog = lazyComponent(() => import('./components/shell/NewTaskDial
 const CommandMenu = commandMenu.Component;
 const NewTaskDialog = newTaskDialog.Component;
 const MirrorAgentsScreen = lazyComponent(() => import('./screens/MirrorAgentsScreen'), m => m.MirrorAgentsScreen).Component;
+const OAuthConsent = lazyComponent(() => import('./account/OAuthConsent'), m => m.OAuthConsent).Component;
 const loadCommandMenu = () => { if (canPrefetch()) return commandMenu.prefetch(); };
 
 export function App() {
@@ -124,6 +125,10 @@ function Router() {
           <SignIn next={next} />
         </Suspense>
       );
+    }
+    if (route.screen === 'authorize') {
+      if (!user) return <Redirect to={paths.signin(route.href)} />;
+      return <Suspense fallback={<LoadingShell />}><OAuthConsent query={route.query} /></Suspense>;
     }
     if (route.screen === 'not-found' && !route.repo) return <NotFound kind="page" />;
   } else if (route.screen === 'explore' || route.screen === 'signin' || route.screen === 'new' || route.screen === 'owner' || route.screen === 'organization' || route.screen === 'new-organization') {

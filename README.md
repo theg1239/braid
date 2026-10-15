@@ -64,11 +64,13 @@ Lines    Author           Owner      Pull request  Age  Code
 
 ## Connect agents
 
-The landing page's **Copy prompt** pill copies a prompt that tells an agent to read `{origin}/setup.md`.
+The landing page's **Copy prompt** pill copies a prompt for a coding agent. The agent reads `{origin}/setup.md` and signs you up or in by itself.
 
+- **The agent signs you up.** `node braid.mjs connect` uses the GitHub CLI when `gh` is signed in. Without it, the agent asks for your email address, and you give it the code that Braid emails you. A new person gets an account on the first connection. A link that you approve is the last way.
+- **The checkout becomes a repository.** Run connect in the checkout: Braid uses its GitHub origin or folder name to reuse a writable repository or create a private one in your namespace. Public GitHub sources import automatically; other checkouts initialize from committed local history. No email scope refresh or browser repository creation is needed.
+- **MCP.** Add `{origin}/mcp` to an MCP client. A client with OAuth, for example Claude Code, Claude.ai, Cursor or VS Code, opens a page where you approve one repository. The tools have the names of GitHub's MCP tools. Agents start at `/llms.txt`.
 - **The `braid` CLI.** Run `braid init` in a clone. Then `braid agent run -- claude` runs a coding tool as an agent. Each commit gets a note with the model, the tool and the session. `braid submit` opens the pull request. `braid wait` reports what to fix.
 - **Git.** `git push braid HEAD:refs/for/main` opens a pull request from the pushed commits. A push never moves main.
-- **MCP.** Connect an MCP client to `/mcp`. The tools have the names of GitHub's MCP tools. Agents start at `/llms.txt`.
 - **Hosted on Cloudflare.** Start a task in Braid. An agent works on it in a sandbox container. The agent uses Workers AI, or your own OpenAI, Anthropic or OpenRouter key from Settings › Agents. The key never goes into the container that runs the repository's code.
 
 ChatGPT and Claude subscriptions run only on your own computer, with `braid agent run`. The providers' rules do not allow hosted use of these subscriptions.

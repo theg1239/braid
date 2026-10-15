@@ -18,7 +18,7 @@ const KEY = /^[a-zA-Z0-9_-]{16,128}$/;
 const HELP = `Braid local coding agent · Node 22+ and Git
 
   node braid.mjs start TASK_URL [--dir DIRECTORY]
-  node braid.mjs connect --url https://braid.example [--workspace ID]
+  node braid.mjs connect --url https://braid.example [--workspace ID | --repository OWNER/REPO] [--email ADDRESS [--code CODE] | --link]
   node braid.mjs checkout --url ORIGIN --mission ID --agent ID --dir NEW_DIRECTORY [--workspace ID]
   node braid.mjs progress --dir DIRECTORY --message TEXT
   node braid.mjs resume --dir DIRECTORY
@@ -27,7 +27,11 @@ const HELP = `Braid local coding agent · Node 22+ and Git
   node braid.mjs submit --dir DIRECTORY --retry
   node braid.mjs wait --dir DIRECTORY [--timeout SECONDS]
 
-Start reuses the approved connection for the task's repository, or asks the owner to approve one, then prepares the task.
+connect signs the agent in for the person, and signs them up when they are new to Braid: with the GitHub CLI when gh is
+signed in, else with --email (Braid emails the person a code; ask them for it and run connect again with --code).
+Use --link explicitly for a link the person opens to approve. Run connect in the checkout: its GitHub origin
+or directory name selects an existing writable repository or creates a private one. --repository overrides the choice.
+Start reuses the approved connection for the task's repository, or connects as above, then prepares the task.
 Run start again to resume, including after a proposal is in review. Commits and local branches are allowed, and
 checkouts prepared by start submit committed work only, so commit the integrated result before submitting.
 Submit again after further commits to revise a proposal. Each revision replaces the previous proposal with the
@@ -245,7 +249,15 @@ export function loadCredentials(origin, env = process.env, { readOnly = false, w
   return { accessToken: tokenValue(record.accessToken), workspaceId: record.workspaceId };
 }
 
-const runtime = options => ({ env: process.env, fetch: globalThis.fetch, sleep, now: Date.now, log: console.log, git: runGit, signals: process, ...options });
+const runtime = options => ({ env: process.env, fetch: globalThis.fetch, sleep, now: Date.now, log: console.log, git: runGit, signals: process, githubToken: githubCliToken, ...options });
+
+/** The GitHub CLI's token for github.com, or null when gh is missing or signed out. It goes once to Braid and is never saved. */
+export function githubCliToken(env = process.env) {
+  try {
+    const token = execFileSync('gh', ['auth', 'token', '--hostname', 'github.com'], { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'ignore'], timeout: 15_000 }).trim();
+    return /^[\x21-\x7e]{20,255}$/.test(token) ? token : null;
+  } catch { return null; }
+}
 
 async function post(rt, url, body, headers = {}, timeout = 30_000) {
   try {
@@ -266,12 +278,110 @@ export function retryDelay(value, interval, now = Date.now()) {
   return Math.max(interval, Number.isFinite(seconds) ? seconds : 0);
 }
 
-/** The owner chooses the repository while approving. A required workspace is checked after approval. */
-export async function connect(origin, options = {}, workspace) {
+const AGENT_NAME = 'Local coding agent';
+/** Where a code Braid emailed waits for the agent to be given it: beside the origin's credentials, never matched as one. */
+const emailFlowFile = (origin, email, env) => join(dirname(credentialFile(origin, env)), sha256(normalizeOrigin(origin)), `email-${sha256(email.trim().toLowerCase())}.json`);
+
+/**
+ * Connects this agent for the person. With the GitHub CLI signed in, its token proves who they are and is discarded;
+ * with an email address, Braid emails them a code to give the agent; otherwise the person approves a link. A new person
+ * is signed up on the way. A required workspace is checked after the connection.
+ */
+export function checkoutTarget(options = {}) {
+  const rt = runtime(options), cwd = options.cwd ?? process.cwd();
+  let root;
+  try { root = rt.git(['rev-parse', '--show-toplevel'], { cwd, env: rt.env }).toString().trim(); } catch { return undefined; }
+  if (!root) return undefined;
+  let origin = '';
+  try { origin = rt.git(['remote', 'get-url', 'origin'], { cwd: root, env: rt.env }).toString().trim(); } catch { /* A local repository needs no upstream. */ }
+  const match = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec(origin);
+  const name = (match?.[2] ?? basename(root)).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 46);
+  return { name: /^[a-z][a-z0-9-]+$/.test(name) ? name : `r-${name || 'repository'}`, ...(match ? { github: { owner: match[1], repo: match[2] } } : {}) };
+}
+
+export async function connect(origin, options = {}, workspace, { email, code, repository, link = false } = {}) {
   origin = normalizeOrigin(origin);
   if (workspace !== undefined) workspace = identifier(workspace);
+  if (repository !== undefined && (typeof repository !== 'string' || repository.length > 141 || !/^[^/\s]+\/[^/\s]+$/.test(repository))) fail('Name the repository as OWNER/REPO.');
   const rt = runtime(options);
-  const response = await post(rt, `${origin}/api/agent/requests`, JSON.stringify({ name: 'Local coding agent', scope: 'work' }));
+  const checkout = !workspace ? checkoutTarget(options) : undefined;
+  const target = { name: AGENT_NAME, ...(checkout ? { checkout } : {}), ...(repository ? { repository } : {}), ...(workspace ? { workspaceId: workspace } : {}) };
+  if (email !== undefined) return code === undefined ? sendEmailCode(rt, origin, email) : emailConnect(rt, origin, email, code, target, workspace);
+  if (!link) {
+    const token = rt.githubToken(rt.env);
+    if (token) {
+      const connected = await selfConnected(rt, origin, await post(rt, `${origin}/api/agent/github`, JSON.stringify({ token, scope: 'work', ...target })), workspace);
+      if (connected) return connected;
+    } else fail('The GitHub CLI is not signed in here. Ask the person for their email address and run connect --email ADDRESS.');
+  }
+  return linkConnect(rt, origin, workspace);
+}
+
+/** A connection is for one repository. Without one, Braid lists the person's repositories or asks them to create one. */
+function repositoryNeeded(data) {
+  const repositories = Array.isArray(data.repositories) ? data.repositories.filter(value => typeof value === 'string').slice(0, 50) : [];
+  fail(`${typeof data.error === 'string' ? data.error : 'Braid needs a repository to connect.'}${repositories.length ? ` Repositories: ${repositories.join(', ')}. Run connect again with --repository OWNER/REPO.` : ''}`);
+}
+const answerOf = response => response.json().then(data => object(data) ? data : {}, () => ({}));
+/** A connection Braid gave for the person's own proof, saved like an approved one; null when the link should follow. */
+async function selfConnected(rt, origin, response, workspace) {
+  const data = await answerOf(response);
+  if (response.status === 409) repositoryNeeded(data);
+  if (response.status !== 201) {
+    fail(`Braid did not connect with GitHub: ${typeof data.error === 'string' ? data.error : `HTTP ${response.status}`}`);
+  }
+  return connected(rt, origin, data, workspace);
+}
+function connected(rt, origin, grant, workspace) {
+  if (grant.scope !== 'work' || grant.tokenType !== 'Bearer') fail('Work access is required. Run connect again.');
+  saveCredentials(origin, grant, rt.env);
+  const approved = identifier(grant.workspaceId);
+  if (workspace && approved !== workspace) fail(`Braid connected repository ${approved}, but ${workspace} is required. That connection was saved for ${approved}; connect again for ${workspace}.`);
+  const repository = typeof grant.repository === 'string' && /^[^/\s]+\/[^/\s]+$/.test(grant.repository) ? grant.repository : approved;
+  if (grant.initialization) {
+    const setup = grant.initialization;
+    if (!object(setup) || typeof setup.accessToken !== 'string' || setup.branch !== 'main') fail('Braid returned invalid setup access.');
+    const root = rt.git(['rev-parse', '--show-toplevel'], { cwd: rt.cwd ?? process.cwd(), env: rt.env }).toString().trim();
+    let head;
+    try { head = rt.git(['rev-parse', '--verify', 'HEAD^{commit}'], { cwd: root, env: rt.env }).toString().trim(); } catch { /* An unborn checkout remains empty. */ }
+    if (head) {
+      if (!COMMIT.test(head)) fail('The checkout returned an invalid commit.');
+      withAskpass(helper => rt.git(['push', '--porcelain', '--force-with-lease=refs/heads/main:', '--', `${origin}/git/${approved}.git`, `${head}:refs/heads/main`], { cwd: root, env: { ...rt.env, GIT_ASKPASS: helper }, token: setup.accessToken }));
+    }
+  }
+  rt.log(`${grant.created ? 'Created private repository' : 'Connected to'} ${origin}/${repository}.`);
+  return { workspaceId: approved };
+}
+async function sendEmailCode(rt, origin, email) {
+  const response = await post(rt, `${origin}/api/agent/email/start`, JSON.stringify({ email, scope: 'work' }));
+  const data = await answerOf(response);
+  if (response.status !== 201) fail(`Braid could not email a code: ${typeof data.error === 'string' ? data.error : `HTTP ${response.status}`}`);
+  if (typeof data.flowId !== 'string' || !/^[0-9a-f-]{36}$/.test(data.flowId) || !Number.isFinite(Date.parse(data.expiresAt))) fail('Braid returned an invalid answer.');
+  const path = emailFlowFile(origin, email, rt.env);
+  privateDirectory(dirname(dirname(path)));
+  privateDirectory(dirname(path));
+  writeJson(path, { origin, flowId: data.flowId, expiresAt: data.expiresAt });
+  rt.log(`Braid emailed the person a code. Ask them for it, then run: node braid.mjs connect --url ${origin} --email ADDRESS --code CODE`);
+  return { emailed: true };
+}
+async function emailConnect(rt, origin, email, code, target, workspace) {
+  const path = emailFlowFile(origin, email, rt.env);
+  let flow;
+  try { flow = readJson(path, 4096, { privateFile: true }); } catch { fail('No code is waiting for this address. Run connect --email ADDRESS first.'); }
+  if (!object(flow) || flow.origin !== origin || typeof flow.flowId !== 'string' || !(Date.parse(flow.expiresAt) > rt.now())) fail('The code for this address expired. Run connect --email ADDRESS for a new one.');
+  const response = await post(rt, `${origin}/api/agent/email/verify`, JSON.stringify({ flowId: flow.flowId, code: text(code, 'code', 32), ...target }));
+  if (response.status === 401) fail('That code is invalid or expired. Check it with the person, or run connect --email ADDRESS for a new one.');
+  const data = await answerOf(response);
+  if (response.status === 409) repositoryNeeded(data);
+  if (response.status !== 201) fail(`Braid did not connect: ${typeof data.error === 'string' ? data.error : `HTTP ${response.status}`}`);
+  const result = connected(rt, origin, data, workspace);
+  rmSync(path, { force: true });
+  return result;
+}
+
+/** The owner chooses the repository while approving the link. A required workspace is checked after approval. */
+async function linkConnect(rt, origin, workspace) {
+  const response = await post(rt, `${origin}/api/agent/requests`, JSON.stringify({ name: AGENT_NAME, scope: 'work' }));
   if (!response.ok) fail(`Authorization request failed (HTTP ${response.status}). ${response.status === 404 || response.status === 503 ? 'Ask the owner to check public accounts, the HTTPS application origin and the session secret. ' : ''}See ${origin}/auth.md before retrying.`);
   const request = await jsonResponse(response);
   let verification;
@@ -1671,7 +1781,7 @@ export async function changeTouching(input, options = {}) {
 const COMMANDS = {
   restack: { options: ['dir'], required: ['dir', 'number'] },
   start: { options: ['dir'], required: ['task'] },
-  connect: { options: ['url', 'workspace'], required: ['url'] },
+  connect: { options: ['url', 'workspace', 'repository', 'email', 'code', 'link'], required: ['url'] },
   checkout: { options: ['url', 'mission', 'agent', 'dir', 'workspace'], required: ['url', 'mission', 'agent', 'dir'] },
   progress: { options: ['dir', 'message'], required: ['dir', 'message'] },
   resume: { options: ['dir'], required: ['dir'] },
@@ -1708,7 +1818,7 @@ export async function main(argv = process.argv.slice(2), options = {}) {
   for (let index = 0; index < args.length; index++) {
     const name = args[index].startsWith('--') ? args[index].slice(2) : '';
     if (!allowed.includes(name) || name in input) fail('Unknown or duplicate option. Run braid.mjs --help.');
-    if (name === 'retry' || name === 'proof') input[name] = true;
+    if (name === 'retry' || name === 'proof' || name === 'link') input[name] = true;
     else {
       if (!args[index + 1] || args[index + 1].startsWith('--')) fail('An option is missing its value. Run braid.mjs --help.');
       input[name] = args[++index];
@@ -1719,7 +1829,12 @@ export async function main(argv = process.argv.slice(2), options = {}) {
   if (input.retry && ['title', 'summary', 'intent', 'rationale', 'model', 'tests', 'proof', 'depends-on'].some(name => name in input)) fail('--retry uses the saved payload; omit the description, model, tests, and proof.');
   if (input.workspace !== undefined) identifier(input.workspace);
   if (command === 'start') return start(input, rt);
-  if (command === 'connect') return connect(input.url, rt, input.workspace);
+  if (command === 'connect') {
+    if (input.code !== undefined && input.email === undefined) fail('--code goes with the --email the code was sent to.');
+    if (input.link && input.email !== undefined) fail('Choose --email or --link, not both.');
+    if (input.repository !== undefined && input.workspace !== undefined) fail('Choose --workspace or --repository, not both.');
+    return connect(input.url, rt, input.workspace, { email: input.email, code: input.code, repository: input.repository, link: input.link });
+  }
   if (command === 'checkout') return checkout(input, rt);
   if (command === 'resume') return resume(input, rt);
   if (command === 'update') return update(input, rt);

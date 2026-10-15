@@ -4,7 +4,7 @@ import type { AccountIdentity } from '../../shared/account';
 import type { AgentScope } from '../../shared/types';
 import { exchangeGitHubToken, openGitHub, sealGitHub, type GitHubCredentials } from '../github/client';
 import { digest } from '../http/auth';
-import { ACCESS_LIFETIME, verifyAccess } from '../http/agent-token';
+import { MCP_ACCESS_LIFETIME, verifyAccess, verifyMcpAccess } from '../http/agent-token';
 import { HttpError, logFailure, refused, type Refusal } from '../errors';
 import type { GitHubIdentity } from '../repositories/provenance';
 import { ProviderFailure, ProviderStore, type HostedProvider, type ProviderOutcome } from '../agents/providers';
@@ -12,7 +12,19 @@ import { checkProviderKey } from '../agents/provider-client';
 import { PROVIDERS, type ProviderConnection, type ProviderId } from '../../shared/providers';
 import { now } from '../workspace/domain';
 interface StoredPasskey { id: string; userId: string; publicKey: string; counter: number; transports: string[]; createdAt: string }
-export interface AgentGrant { id: string; user: AccountIdentity; workspaceId: string; scope: AgentScope; label: string; expires: number }
+/** `client` names the OAuth client a grant was authorized for; such a grant has no connection token, only refresh tokens. */
+export interface AgentGrant { id: string; user: AccountIdentity; workspaceId: string; scope: AgentScope; label: string; expires: number; client?: string }
+/** A client that registered itself (RFC 7591). A confidential one keeps only the digest of its secret. */
+export interface OAuthClient { id: string; name: string; redirectUris: string[]; authMethod: 'none' | 'client_secret_post' | 'client_secret_basic'; grantTypes: string[]; secretDigest?: string; createdAt: number }
+/** What a person approved, bound to the client, its redirect, its PKCE challenge and the MCP resource. */
+export interface OAuthCode { clientId: string; redirectUri: string; challenge: string; resource: string; scope: 'read' | 'work'; user: AccountIdentity; workspaceId: string; label: string; refresh: boolean }
+/** An OAuth grant lasts this long after it was approved or last refreshed. */
+export const OAUTH_GRANT_MS = 30 * 86_400_000;
+const OAUTH_CODE_MS = 5 * 60_000;
+/** A registered client is kept a day until it is first used, then for 90 days after each use. */
+const OAUTH_CLIENT_UNUSED_MS = 86_400_000, OAUTH_CLIENT_MS = 90 * 86_400_000;
+/** At most this many unused refresh tokens per grant; older ones retire. */
+const OAUTH_OPEN_REFRESHES = 4;
 interface GitHubImportGrant { user: AccountIdentity; workspaceId: string; repositoryId: number; fullName: string; token: string; expires: number; mirror?: boolean }
 
 const refreshable = (credentials: GitHubCredentials): credentials is GitHubCredentials & { refreshToken: string } =>
@@ -28,6 +40,14 @@ export class Security extends DurableObject<BraidEnv> {
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS identities (digest TEXT PRIMARY KEY, value TEXT NOT NULL)');
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS oauth (digest TEXT PRIMARY KEY, verifier TEXT NOT NULL, expires INTEGER NOT NULL)');
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL)');
+    // Empty means no verified email. The old UNIQUE constraint admitted only one such identity.
+    if (ctx.storage.sql.exec<{ sql: string }>("SELECT sql FROM sqlite_master WHERE name = 'profiles'").one().sql.includes('email TEXT NOT NULL UNIQUE')) ctx.storage.transactionSync(() => {
+      ctx.storage.sql.exec('CREATE TABLE profiles_next (id TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL)');
+      ctx.storage.sql.exec('INSERT INTO profiles_next SELECT id, email, name FROM profiles');
+      ctx.storage.sql.exec('DROP TABLE profiles');
+      ctx.storage.sql.exec('ALTER TABLE profiles_next RENAME TO profiles');
+      ctx.storage.sql.exec("CREATE UNIQUE INDEX profiles_verified_email ON profiles(email) WHERE email <> ''");
+    });
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS external_accounts (external_id TEXT PRIMARY KEY, user_id TEXT NOT NULL)');
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)');
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS passkeys (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, value TEXT NOT NULL)');
@@ -39,6 +59,11 @@ export class Security extends DurableObject<BraidEnv> {
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS github_imports (digest TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, value TEXT NOT NULL, expires INTEGER NOT NULL)');
     // The GitHub account each person signed in or connected with, which names them in commits by its no-reply address.
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS github_identities (user_id TEXT PRIMARY KEY, github_id INTEGER NOT NULL, login TEXT NOT NULL, source TEXT NOT NULL)');
+    // OAuth for MCP clients: registered clients, single-use codes, and refresh tokens by state ('current', 'previous', 'retired').
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS oauth_clients (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires INTEGER NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS oauth_codes (digest TEXT PRIMARY KEY, value TEXT NOT NULL, expires INTEGER NOT NULL, grant_id TEXT)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS oauth_refresh (digest TEXT PRIMARY KEY, grant_id TEXT NOT NULL, state TEXT NOT NULL, expires INTEGER NOT NULL)');
+    ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS oauth_refresh_grant ON oauth_refresh(grant_id)');
   }
   /**
    * Records a person's GitHub account, read together from one GitHub answer. Signing in with GitHub names the
@@ -136,7 +161,7 @@ export class Security extends DurableObject<BraidEnv> {
       const linked = this.ctx.storage.sql.exec<{ id: string; email: string; name: string }>('SELECT p.id, p.email, p.name FROM profiles p JOIN external_accounts e ON e.user_id = p.id WHERE e.external_id = ?', external.id).toArray()[0];
       if (linked) return linked;
       // Both callers have just verified ownership of this email through GitHub or a one-time code.
-      let user = this.ctx.storage.sql.exec<{ id: string; email: string; name: string }>('SELECT id, email, name FROM profiles WHERE email = ?', external.email).toArray()[0];
+      let user = external.email ? this.ctx.storage.sql.exec<{ id: string; email: string; name: string }>('SELECT id, email, name FROM profiles WHERE email = ?', external.email).toArray()[0] : undefined;
       if (!user) {
         user = { id: crypto.randomUUID(), email: external.email, name: external.name };
         this.ctx.storage.sql.exec('INSERT INTO profiles (id, email, name) VALUES (?, ?, ?)', user.id, user.email, user.name);
@@ -160,14 +185,25 @@ export class Security extends DurableObject<BraidEnv> {
     });
   }
   verifyEmail(id: string, codeDigest: string): string | null {
+    return this.takeEmailCode(id, codeDigest, 'email')?.email ?? null;
+  }
+  /**
+   * A code an agent was given for a person's email, taken on a match within five attempts. The caller puts it back
+   * with `challenge` when no connection could follow, so the person need not read a new code.
+   */
+  takeAgentEmail(id: string, codeDigest: string): { email: string; scope: Exclude<AgentScope, 'fleet'>; value: string; expires: number } | null {
+    const taken = this.takeEmailCode(id, codeDigest, 'agent');
+    return taken && { email: taken.email, scope: taken.scope!, value: taken.value, expires: taken.expires };
+  }
+  private takeEmailCode(id: string, codeDigest: string, kind: 'email' | 'agent') {
     return this.ctx.storage.transactionSync(() => {
       const row = this.ctx.storage.sql.exec<{ value: string; expires: number; attempts: number }>('SELECT value, expires, attempts FROM challenges WHERE id = ?', id).toArray()[0];
       if (!row || row.expires <= Date.now() || row.attempts >= 5) return null;
       this.ctx.storage.sql.exec('UPDATE challenges SET attempts = attempts + 1 WHERE id = ?', id);
-      const value = JSON.parse(row.value) as { kind: string; email: string; digest: string };
-      if (value.kind !== 'email' || value.digest !== codeDigest) return null;
+      const value = JSON.parse(row.value) as { kind: string; email: string; digest: string; scope?: Exclude<AgentScope, 'fleet'> };
+      if (value.kind !== kind || value.digest !== codeDigest) return null;
       this.ctx.storage.sql.exec('DELETE FROM challenges WHERE id = ?', id);
-      return value.email;
+      return { email: value.email, scope: value.scope, value: row.value, expires: row.expires };
     });
   }
   passkeys(userId: string): StoredPasskey[] {
@@ -231,25 +267,113 @@ export class Security extends DurableObject<BraidEnv> {
   revokeAgent(userId: string, id: string) {
     this.ctx.storage.transactionSync(() => {
       const grant = this.ctx.storage.sql.exec<{ expires: number }>('SELECT expires FROM agent_grants WHERE user_id = ? AND id = ?', userId, id).toArray()[0];
-      if (!grant) return;
-      this.ctx.storage.sql.exec('DELETE FROM agent_grants WHERE user_id = ? AND id = ?', userId, id);
-      // Cover issued tokens and any exchange already in flight, whose expiry is bounded by this grant.
-      this.ctx.storage.sql.exec('INSERT OR REPLACE INTO compromised_grants (id, expires) VALUES (?, ?)', id, Math.max(grant.expires, Date.now() + ACCESS_LIFETIME));
+      if (grant) this.retireGrant(id, grant.expires);
     });
+  }
+  private grantById(id: string): AgentGrant | null {
+    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM agent_grants WHERE id = ? AND expires > ?', id, Date.now()).toArray()[0];
+    return row ? JSON.parse(row.value) : null;
+  }
+  /** Ends a grant with its connection or refresh tokens. The access tokens it issued stay refused while any could be valid. */
+  private retireGrant(id: string, expires: number) {
+    this.ctx.storage.sql.exec('DELETE FROM agent_grants WHERE id = ?', id);
+    this.ctx.storage.sql.exec('DELETE FROM oauth_refresh WHERE grant_id = ?', id);
+    // Cover issued tokens and any exchange already in flight, whose expiry is bounded by this grant or by an OAuth token's hour.
+    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO compromised_grants (id, expires) VALUES (?, ?)', id, Math.max(expires, Date.now() + MCP_ACCESS_LIFETIME));
   }
   /** A matched live token revokes its entire connection, including already minted access tokens, across workspaces. */
   async revokeLeakedToken(token: string): Promise<{ id: string; workspaceId: string } | null> {
-    // An access token names its grant; any other secret is looked up by its digest.
-    const claims = await verifyAccess(this.env, token);
-    const grant = claims ? { id: claims.grant, workspaceId: claims.workspace, expires: claims.exp } : this.agent(await digest(token));
+    // An access token names its grant; a refresh token is found by its digest, and any other secret is a connection's.
+    const claims = await verifyAccess(this.env, token) ?? await verifyMcpAccess(this.env, token);
+    const hash = await digest(token);
+    const refreshed = claims ? undefined : this.ctx.storage.sql.exec<{ grantId: string }>('SELECT grant_id AS grantId FROM oauth_refresh WHERE digest = ?', hash).toArray()[0];
+    const grant = claims ? { id: claims.grant, workspaceId: claims.workspace, expires: claims.exp } : refreshed ? this.grantById(refreshed.grantId) : this.agent(hash);
     if (!grant || this.accessRevoked(grant.id)) return null;
     this.ctx.storage.transactionSync(() => {
-      this.ctx.storage.sql.exec('DELETE FROM agent_grants WHERE id = ?', grant.id);
-      this.ctx.storage.sql.exec('INSERT OR REPLACE INTO compromised_grants (id, expires) VALUES (?, ?)', grant.id, Math.max(grant.expires, Date.now() + 300_000));
+      this.retireGrant(grant.id, grant.expires);
       this.ctx.storage.sql.exec("INSERT INTO security_audit (action, target, workspace_id, created_at) VALUES ('agent.secret-revoked', ?, ?, ?)", grant.id, grant.workspaceId, now());
     });
     if (this.env.DIRECTORY) await directoryOf(this.env).repositorySecurityEvent(grant.workspaceId, 'agent.secret-revoked', grant.id);
     return { id: grant.id, workspaceId: grant.workspaceId };
+  }
+  /*
+   * OAuth for MCP clients (worker/http/oauth.ts). An approval becomes an agent grant like a device approval's, with
+   * refresh tokens in place of a connection token. Codes and tokens are kept only as SHA-256 digests.
+   */
+  async registerOAuthClient(client: OAuthClient) {
+    this.ctx.storage.sql.exec('INSERT INTO oauth_clients (id, value, expires) VALUES (?, ?, ?)', client.id, JSON.stringify(client), Date.now() + OAUTH_CLIENT_UNUSED_MS);
+    await this.scheduleCleanup();
+  }
+  oauthClient(id: string): OAuthClient | null {
+    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM oauth_clients WHERE id = ? AND expires > ?', id, Date.now()).toArray()[0];
+    return row ? JSON.parse(row.value) : null;
+  }
+  private useClient(id: string) {
+    this.ctx.storage.sql.exec('UPDATE oauth_clients SET expires = MAX(expires, ?) WHERE id = ?', Date.now() + OAUTH_CLIENT_MS, id);
+  }
+  async issueOAuthCode(hash: string, code: OAuthCode) {
+    this.ctx.storage.sql.exec('INSERT INTO oauth_codes (digest, value, expires) VALUES (?, ?, ?)', hash, JSON.stringify(code), Date.now() + OAUTH_CODE_MS);
+    await this.scheduleCleanup();
+  }
+  /**
+   * Exchanges a code once. Any presentation spends it, and a second one revokes the grant the first made (OAuth 2.1
+   * section 4.1.3). A token request without a resource means the code's own. `refresh` is the first refresh token's digest.
+   */
+  redeemOAuthCode(hash: string, presented: { clientId: string; redirectUri: string; challenge: string; resource?: string }, issued: { id: string; refresh: string }): { ok: true; grant: AgentGrant; refresh: boolean } | { ok: false } {
+    return this.ctx.storage.transactionSync(() => {
+      const row = this.ctx.storage.sql.exec<{ value: string; expires: number; grantId: string | null }>('SELECT value, expires, grant_id AS grantId FROM oauth_codes WHERE digest = ?', hash).toArray()[0];
+      if (!row || row.expires <= Date.now()) return { ok: false };
+      if (row.grantId !== null) {
+        if (row.grantId) this.retireGrant(row.grantId, this.grantById(row.grantId)?.expires ?? 0);
+        return { ok: false };
+      }
+      const code = JSON.parse(row.value) as OAuthCode;
+      const matches = code.clientId === presented.clientId && code.redirectUri === presented.redirectUri && code.challenge === presented.challenge
+        && (presented.resource === undefined || presented.resource === code.resource);
+      this.ctx.storage.sql.exec('UPDATE oauth_codes SET grant_id = ? WHERE digest = ?', matches ? issued.id : '', hash);
+      if (!matches) return { ok: false };
+      const grant: AgentGrant = { id: issued.id, user: code.user, workspaceId: code.workspaceId, scope: code.scope, label: code.label, expires: Date.now() + OAUTH_GRANT_MS, client: code.clientId };
+      this.ctx.storage.sql.exec('INSERT INTO agent_grants (digest, id, user_id, value, expires) VALUES (?, ?, ?, ?, ?)', `oauth:${grant.id}`, grant.id, grant.user.id, JSON.stringify(grant), grant.expires);
+      if (code.refresh) this.ctx.storage.sql.exec("INSERT INTO oauth_refresh (digest, grant_id, state, expires) VALUES (?, ?, 'current', ?)", issued.refresh, grant.id, grant.expires);
+      this.useClient(code.clientId);
+      return { ok: true, grant, refresh: code.refresh };
+    });
+  }
+  /**
+   * Rotates a refresh token. The token before the newest stays usable until the newest is used, so a client whose
+   * answer was lost can retry. A retired token, or one another client presents, has been copied and ends the grant.
+   * Each refresh moves the grant's expiry forward.
+   */
+  refreshOAuth(hash: string, clientId: string, issued: string): { ok: true; grant: AgentGrant } | { ok: false } {
+    return this.ctx.storage.transactionSync(() => {
+      const row = this.ctx.storage.sql.exec<{ grantId: string; state: 'current' | 'previous' | 'retired'; expires: number }>('SELECT grant_id AS grantId, state, expires FROM oauth_refresh WHERE digest = ?', hash).toArray()[0];
+      if (!row || row.expires <= Date.now()) return { ok: false };
+      const grant = this.grantById(row.grantId);
+      if (!grant || this.accessRevoked(grant.id)) return { ok: false };
+      if (row.state === 'retired' || grant.client !== clientId) { this.retireGrant(grant.id, grant.expires); return { ok: false }; }
+      if (row.state === 'current') {
+        this.ctx.storage.sql.exec("UPDATE oauth_refresh SET state = 'retired' WHERE grant_id = ? AND digest != ?", grant.id, hash);
+        this.ctx.storage.sql.exec("UPDATE oauth_refresh SET state = 'previous' WHERE digest = ?", hash);
+      }
+      const expires = Date.now() + OAUTH_GRANT_MS;
+      this.ctx.storage.sql.exec("INSERT INTO oauth_refresh (digest, grant_id, state, expires) VALUES (?, ?, 'current', ?)", issued, grant.id, expires);
+      // Each retry of the previous token opens another; only the newest few stay usable.
+      this.ctx.storage.sql.exec("UPDATE oauth_refresh SET state = 'retired' WHERE grant_id = ? AND state = 'current' AND digest NOT IN (SELECT digest FROM oauth_refresh WHERE grant_id = ? AND state = 'current' ORDER BY rowid DESC LIMIT ?)", grant.id, grant.id, OAUTH_OPEN_REFRESHES);
+      this.ctx.storage.sql.exec("UPDATE oauth_refresh SET expires = ? WHERE grant_id = ? AND state != 'retired'", expires, grant.id);
+      const renewed = { ...grant, expires };
+      this.ctx.storage.sql.exec('UPDATE agent_grants SET value = ?, expires = ? WHERE id = ?', JSON.stringify(renewed), expires, grant.id);
+      this.useClient(clientId);
+      return { ok: true, grant: renewed };
+    });
+  }
+  /** RFC 7009: a refresh token, or an access token's grant, ends the whole grant, only for the client it was issued to. */
+  revokeOAuth(token: { refresh: string } | { grant: string }, clientId: string) {
+    this.ctx.storage.transactionSync(() => {
+      const id = 'grant' in token ? token.grant
+        : this.ctx.storage.sql.exec<{ grantId: string }>('SELECT grant_id AS grantId FROM oauth_refresh WHERE digest = ?', token.refresh).toArray()[0]?.grantId;
+      const grant = id ? this.grantById(id) : null;
+      if (grant?.client === clientId) this.retireGrant(grant.id, grant.expires);
+    });
   }
   accessRevoked(grant: string): boolean {
     return this.ctx.storage.sql.exec('SELECT id FROM compromised_grants WHERE id = ? AND expires > ?', grant, Date.now()).toArray().length > 0;
@@ -316,10 +440,10 @@ export class Security extends DurableObject<BraidEnv> {
   }
   async alarm() {
     const time = Date.now();
-    for (const table of ['sessions', 'compromised_grants', 'budgets', 'oauth', 'challenges', 'devices', 'agent_grants', 'github_imports'])
-      this.ctx.storage.sql.exec(`DELETE FROM ${table} WHERE expires <= ?`, time);
+    const tables = ['sessions', 'compromised_grants', 'budgets', 'oauth', 'challenges', 'devices', 'agent_grants', 'github_imports', 'oauth_clients', 'oauth_codes', 'oauth_refresh'];
+    for (const table of tables) this.ctx.storage.sql.exec(`DELETE FROM ${table} WHERE expires <= ?`, time);
     this.ctx.storage.sql.exec('DELETE FROM identities WHERE digest NOT IN (SELECT digest FROM sessions)');
-    const remaining = this.ctx.storage.sql.exec<{ count: number }>('SELECT (SELECT COUNT(*) FROM sessions) + (SELECT COUNT(*) FROM budgets) + (SELECT COUNT(*) FROM oauth) + (SELECT COUNT(*) FROM challenges) + (SELECT COUNT(*) FROM devices) + (SELECT COUNT(*) FROM agent_grants) + (SELECT COUNT(*) FROM github_imports) AS count').one().count;
+    const remaining = this.ctx.storage.sql.exec<{ count: number }>(`SELECT ${tables.filter(table => table !== 'compromised_grants').map(table => `(SELECT COUNT(*) FROM ${table})`).join(' + ')} AS count`).one().count;
     if (remaining) await this.ctx.storage.setAlarm(Date.now() + 86_400_000);
   }
 }

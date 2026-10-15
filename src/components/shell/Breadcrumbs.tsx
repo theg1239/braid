@@ -1,7 +1,7 @@
 import { EXAMPLE_ADDRESS, addressPath, paths, type Address, type Route } from '../../lib/router';
 import { RouterLink } from '../ui/Link';
 
-const LABELS: Partial<Record<Route['screen'], string>> = { 'global-search': 'Search', home: 'Dashboard', explore: 'Explore', new: 'New repository', 'new-organization': 'New organization', signin: 'Sign in', username: 'Pick a username', organizations: 'Organizations', 'not-found': 'Page not found' };
+const LABELS: Partial<Record<Route['screen'], string>> = { 'global-search': 'Search', home: 'Dashboard', explore: 'Explore', new: 'New repository', 'new-organization': 'New organization', signin: 'Sign in', authorize: 'Authorize', username: 'Pick a username', organizations: 'Organizations', 'not-found': 'Page not found' };
 
 /** URL labels are always available; resolved names can replace them without changing the frame. */
 export function Breadcrumbs({ route, address = route.repo, ownerName, repoName }: { route: Route; address?: Address | null; ownerName?: string; repoName?: string }) {

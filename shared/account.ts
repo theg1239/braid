@@ -1,5 +1,5 @@
 export type OrganizationRole = 'owner' | 'member';
-/** Old sessions predate usernames; account responses always include username and avatarUrl. */
+/** An empty email means no verified email is available. Old sessions predate usernames; account responses always include username and avatarUrl. */
 export interface AccountIdentity { id: string; email: string; name: string; username?: string | null; avatarUrl?: string | null }
 export type OwnerKind = 'user' | 'organization';
 /** Who may read a repository without signing in. Writes always need an account with access. */

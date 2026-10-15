@@ -2033,6 +2033,10 @@ function _standardSchema(schema) {
 	};
 	return schema;
 }
+/**
+* [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) regex.
+*/
+const UUID_REGEX = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu;
 /* @__NO_SIDE_EFFECTS__ */
 function check(requirement, message$1) {
 	return {
@@ -2289,6 +2293,22 @@ function url$1(message$1) {
 		message: message$1,
 		"~run"(dataset, config$1) {
 			if (dataset.typed && !this.requirement(dataset.value)) _addIssue(this, "URL", dataset, config$1);
+			return dataset;
+		}
+	};
+}
+/* @__NO_SIDE_EFFECTS__ */
+function uuid(message$1) {
+	return {
+		kind: "validation",
+		type: "uuid",
+		reference: uuid,
+		async: false,
+		expects: null,
+		requirement: UUID_REGEX,
+		message: message$1,
+		"~run"(dataset, config$1) {
+			if (dataset.typed && !this.requirement.test(dataset.value)) _addIssue(this, "UUID", dataset, config$1);
 			return dataset;
 		}
 	};
@@ -3778,6 +3798,24 @@ function loadCredentials(context, origin, workspaceId) {
 	if (current[0]) return current[0];
 	return fail(saved.length ? `Your Braid approval for ${origin} expired. Run braid login again.` : `Not signed in to ${origin}. Run braid login${wanted ? "" : ` --url ${origin}`}.`);
 }
+const emailFlow = /* @__PURE__ */ object({
+	origin: /* @__PURE__ */ string(),
+	flowId: /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ uuid()),
+	expiresAt: /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ check((value) => Number.isFinite(Date.parse(value))))
+});
+/** Where a code Braid emailed waits for the person to read it out, beside the origin's approvals, under a name none has. */
+const emailFlowFile = (env, origin, email) => join(configRoot(env), sha256(normalizeOrigin(origin)), `email-${sha256(email.trim().toLowerCase())}.json`);
+function saveEmailFlow(env, email, flow) {
+	const path = emailFlowFile(env, flow.origin, email);
+	privateDirectory(dirname(dirname(path)));
+	privateDirectory(dirname(path));
+	writePrivateJson(path, flow);
+}
+const readEmailFlow = (env, origin, email) => readPrivateJson(emailFlowFile(env, origin, email), emailFlow, {
+	max: 4096,
+	label: "The saved email code request"
+});
+const removeEmailFlow = (env, origin, email) => rmSync(emailFlowFile(env, origin, email), { force: true });
 /** Deletes saved approvals for an origin, or one repository at it, and returns how many were removed. */
 function removeCredentials(env, origin, workspaceId) {
 	const records = savedCredentials(env, origin).filter((record) => !workspaceId || record.workspaceId === workspaceId);
@@ -3847,6 +3885,25 @@ const grant = /* @__PURE__ */ object({
 		"work",
 		"fleet"
 	])
+});
+/** A connection for the person's own proof also names its repository by address. */
+const selfGrant = /* @__PURE__ */ object({
+	...grant.entries,
+	created: /* @__PURE__ */ optional$1(/* @__PURE__ */ boolean()),
+	initialization: /* @__PURE__ */ optional$1(/* @__PURE__ */ object({
+		accessToken: /* @__PURE__ */ string(),
+		branch: /* @__PURE__ */ literal("main")
+	})),
+	repository: /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ regex(/^[^/\s]+\/[^/\s]+$/))
+});
+/** Without one repository to connect, Braid says why and lists the person's repositories to choose from. */
+const repositoryChoice = /* @__PURE__ */ object({
+	error: /* @__PURE__ */ string(),
+	repositories: /* @__PURE__ */ array(/* @__PURE__ */ string())
+});
+const emailStarted = /* @__PURE__ */ object({
+	flowId: /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ uuid()),
+	expiresAt: time
 });
 /** A five-minute access token exchanged for the saved connection, and the agent identity Braid gives it. */
 const access = /* @__PURE__ */ object({
@@ -4070,15 +4127,15 @@ const agentRecords = /* @__PURE__ */ array(/* @__PURE__ */ object({
 	lastActive: /* @__PURE__ */ string(),
 	simulated: /* @__PURE__ */ optional$1(/* @__PURE__ */ literal(true))
 }));
-const text$3 = (max) => /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ trim(), /* @__PURE__ */ nonEmpty(), /* @__PURE__ */ maxLength(max));
+const text$4 = (max) => /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ trim(), /* @__PURE__ */ nonEmpty(), /* @__PURE__ */ maxLength(max));
 const testReports = /* @__PURE__ */ pipe(/* @__PURE__ */ array(/* @__PURE__ */ object({
-	command: text$3(400),
+	command: text$4(400),
 	result: /* @__PURE__ */ picklist([
 		"passed",
 		"failed",
 		"not-run"
 	]),
-	detail: /* @__PURE__ */ optional$1(text$3(2e3))
+	detail: /* @__PURE__ */ optional$1(text$4(2e3))
 }), "The tests file holds a JSON list of {command, result, detail?} reports."), /* @__PURE__ */ maxLength(10, "Report at most 10 tests."));
 const evidenceInput = /* @__PURE__ */ variant("kind", [/* @__PURE__ */ object({
 	kind: /* @__PURE__ */ literal("screenshot"),
@@ -5029,11 +5086,11 @@ function installActivityHooks(context, command, tool) {
 }
 //#endregion
 //#region src/activity.ts
-const text$2 = /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ maxLength(240));
+const text$3 = /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ maxLength(240));
 const eventSchema = /* @__PURE__ */ object({
-	id: text$2,
+	id: text$3,
 	sequence: /* @__PURE__ */ number(),
-	at: text$2,
+	at: text$3,
 	source: /* @__PURE__ */ picklist([
 		"process",
 		"claude-hook",
@@ -5050,22 +5107,22 @@ const eventSchema = /* @__PURE__ */ object({
 		"failed",
 		"commit"
 	]),
-	path: /* @__PURE__ */ optional$1(text$2),
-	command: /* @__PURE__ */ optional$1(text$2),
+	path: /* @__PURE__ */ optional$1(text$3),
+	command: /* @__PURE__ */ optional$1(text$3),
 	exitCode: /* @__PURE__ */ optional$1(/* @__PURE__ */ number()),
-	commit: /* @__PURE__ */ optional$1(text$2),
+	commit: /* @__PURE__ */ optional$1(text$3),
 	completed: /* @__PURE__ */ optional$1(/* @__PURE__ */ boolean())
 });
 const metadataSchema = /* @__PURE__ */ object({
-	origin: text$2,
-	workspaceId: text$2,
-	session: text$2,
+	origin: text$3,
+	workspaceId: text$3,
+	session: text$3,
 	root: /* @__PURE__ */ string(),
 	branch: /* @__PURE__ */ nullable(/* @__PURE__ */ string()),
 	pid: /* @__PURE__ */ number(),
-	tool: /* @__PURE__ */ optional$1(text$2),
-	model: /* @__PURE__ */ optional$1(text$2),
-	changeId: /* @__PURE__ */ optional$1(text$2),
+	tool: /* @__PURE__ */ optional$1(text$3),
+	model: /* @__PURE__ */ optional$1(text$3),
+	changeId: /* @__PURE__ */ optional$1(text$3),
 	changeNumber: /* @__PURE__ */ optional$1(/* @__PURE__ */ number()),
 	changeUrl: /* @__PURE__ */ optional$1(/* @__PURE__ */ string()),
 	closed: /* @__PURE__ */ optional$1(/* @__PURE__ */ boolean())
@@ -5073,8 +5130,8 @@ const metadataSchema = /* @__PURE__ */ object({
 const stateSchema = /* @__PURE__ */ object({
 	retryAt: /* @__PURE__ */ number(),
 	attempts: /* @__PURE__ */ number(),
-	lastError: /* @__PURE__ */ optional$1(text$2),
-	sentChange: /* @__PURE__ */ optional$1(text$2),
+	lastError: /* @__PURE__ */ optional$1(text$3),
+	sentChange: /* @__PURE__ */ optional$1(text$3),
 	heartbeat: /* @__PURE__ */ optional$1(/* @__PURE__ */ number())
 });
 const ack = /* @__PURE__ */ object({ accepted: /* @__PURE__ */ array(/* @__PURE__ */ string()) });
@@ -6337,12 +6394,26 @@ const url = {
 	placeholder: "url",
 	optional: true
 };
+const AGENT = "Braid CLI";
 const day = (at) => new Date(at).toISOString().slice(0, 10);
+/** Saves an approval with owner-only permissions where braid.mjs keeps its own. Work access is required. */
+function keep(context, origin, approved, wanted) {
+	if (approved.scope !== "work") fail(`The owner approved ${approved.scope} access, and braid needs work access to submit changes. Run braid login again and approve it as asked.`);
+	if (Date.parse(approved.expiresAt) <= context.now()) fail("The approval had already expired. Run braid login again.");
+	saveCredentials(context.env, {
+		origin,
+		accessToken: approved.accessToken,
+		workspaceId: approved.workspaceId,
+		expiresAt: approved.expiresAt
+	});
+	if (wanted && approved.workspaceId !== wanted) fail(`The owner approved repository ${approved.workspaceId}, but ${wanted} is required. That approval was saved; run braid login again and choose ${wanted}.`);
+	return approved;
+}
 async function deviceLogin(context, origin, wanted) {
 	const request = await answer(await send(context, `${origin}/api/agent/requests`, {
 		method: "POST",
 		body: {
-			name: "Braid CLI",
+			name: AGENT,
 			scope: "work"
 		}
 	}), deviceRequest, { path: "/api/agent/requests" });
@@ -6366,24 +6437,160 @@ async function deviceLogin(context, origin, wanted) {
 			await poll.body?.cancel();
 			continue;
 		}
-		const approved = await answer(poll, grant, { path: "/api/agent/token" });
-		if (approved.scope !== "work") fail(`The owner approved ${approved.scope} access, and braid needs work access to submit changes. Run braid login again and approve it as asked.`);
-		if (Date.parse(approved.expiresAt) <= context.now()) fail("The approval had already expired. Run braid login again.");
-		saveCredentials(context.env, {
-			origin,
-			accessToken: approved.accessToken,
-			workspaceId: approved.workspaceId,
-			expiresAt: approved.expiresAt
-		});
-		if (wanted && approved.workspaceId !== wanted) fail(`The owner approved repository ${approved.workspaceId}, but ${wanted} is required. That approval was saved; run braid login again and choose ${wanted}.`);
-		return approved;
+		return keep(context, origin, await answer(poll, grant, { path: "/api/agent/token" }), wanted);
 	}
 	return fail("The request expired before anyone approved it. Run braid login to try again.");
+}
+/** The GitHub CLI's token for github.com, or undefined when gh is missing or signed out. It goes once to Braid and is never saved. */
+function githubCliToken(env) {
+	try {
+		const token = execFileSync("gh", [
+			"auth",
+			"token",
+			"--hostname",
+			"github.com"
+		], {
+			encoding: "utf8",
+			env,
+			stdio: [
+				"ignore",
+				"pipe",
+				"ignore"
+			],
+			timeout: 15e3
+		}).trim();
+		return /^[\x21-\x7e]{20,255}$/.test(token) ? token : void 0;
+	} catch {
+		return;
+	}
+}
+function checkoutTarget(context) {
+	const root = strictGit(context, ["rev-parse", "--show-toplevel"]);
+	if (root.status !== 0) return void 0;
+	const path = root.stdout.toString().trim();
+	const origin = strictGit(context, [
+		"remote",
+		"get-url",
+		"origin"
+	], { cwd: path }).stdout.toString().trim();
+	const match = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec(origin);
+	const name = (match?.[2] ?? basename(path)).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 46);
+	return {
+		name: /^[a-z][a-z0-9-]+$/.test(name) ? name : `r-${name || "repository"}`,
+		...match ? { github: {
+			owner: match[1],
+			repo: match[2]
+		} } : {}
+	};
+}
+const naming = ({ workspace, repository, checkout }) => ({
+	...checkout ? { checkout } : {},
+	...workspace ? { workspaceId: workspace } : {},
+	...repository ? { repository } : {}
+});
+/** A connection for the person's own proof. Without one repository to connect, Braid's answer names the choices. */
+async function selfLogin(context, origin, response, path, wanted) {
+	if (response.status === 409) {
+		const choice = /* @__PURE__ */ safeParse(repositoryChoice, await response.json().catch(() => void 0));
+		fail(choice.success ? `${choice.output.error}${choice.output.repositories.length ? ` Repositories: ${choice.output.repositories.join(", ")}. Run braid login again with --repository OWNER/REPO.` : ""}` : "Braid needs a repository to connect.");
+	}
+	const approved = await answer(response, selfGrant, { path });
+	keep(context, origin, approved, wanted.workspace);
+	if (approved.initialization) {
+		const head = strictGit(context, [
+			"rev-parse",
+			"--verify",
+			"HEAD^{commit}"
+		]);
+		if (head.status === 0) strict(context, [
+			"push",
+			"--porcelain",
+			"--force-with-lease=refs/heads/main:",
+			"--",
+			`${origin}/git/${approved.workspaceId}.git`,
+			`${head.stdout.toString().trim()}:refs/heads/main`
+		], { token: approved.initialization.accessToken });
+	}
+	print(context, `${approved.created ? "Created private repository" : "Connected to"} ${origin}/${approved.repository}.`);
+	return approved;
+}
+/**
+* Signs braid in for the person, and signs them up when they are new to Braid: the GitHub CLI's account when gh is
+* signed in; otherwise asks for email. Browser approval is available only through an explicit --link.
+*/
+async function agentLogin(context, origin, wanted = {}, link = false) {
+	if (!wanted.workspace && !wanted.checkout) wanted = {
+		...wanted,
+		checkout: checkoutTarget(context)
+	};
+	if (!link) {
+		const token = githubCliToken(context.env);
+		if (token) {
+			const response = await send(context, `${origin}/api/agent/github`, {
+				method: "POST",
+				body: {
+					token,
+					name: AGENT,
+					scope: "work",
+					...naming(wanted)
+				}
+			});
+			if (response.status === 201 || response.status === 409) return selfLogin(context, origin, response, "/api/agent/github", wanted);
+			const reason = /* @__PURE__ */ safeParse(errorBody, await response.json().catch(() => void 0));
+			fail(`Braid did not connect with GitHub: ${reason.success ? reason.output.error : `HTTP ${response.status}`}`);
+		} else fail("The GitHub CLI is not signed in here. Ask the person for their email address and run braid login --email ADDRESS.");
+	}
+	return deviceLogin(context, origin, wanted.workspace);
+}
+async function emailLogin(context, origin, email, code, wanted) {
+	if (!wanted.workspace && !wanted.checkout) wanted = {
+		...wanted,
+		checkout: checkoutTarget(context)
+	};
+	if (code === void 0) {
+		const started = await answer(await send(context, `${origin}/api/agent/email/start`, {
+			method: "POST",
+			body: {
+				email,
+				scope: "work"
+			}
+		}), emailStarted, { path: "/api/agent/email/start" });
+		saveEmailFlow(context.env, email, {
+			origin,
+			...started
+		});
+		print(context, `Braid emailed the person a code. Ask them for it, then run: braid login --url ${origin} --email ADDRESS --code CODE`);
+		return;
+	}
+	const flow = readEmailFlow(context.env, origin, email) ?? fail("No code is waiting for this address. Run braid login --email ADDRESS first.");
+	if (Date.parse(flow.expiresAt) <= context.now()) fail("The code for this address expired. Run braid login --email ADDRESS for a new one.");
+	const response = await send(context, `${origin}/api/agent/email/verify`, {
+		method: "POST",
+		body: {
+			flowId: flow.flowId,
+			code,
+			name: AGENT,
+			...naming(wanted)
+		}
+	});
+	if (response.status === 401) fail("That code is invalid or expired. Check it with the person, or run braid login --email ADDRESS for a new one.");
+	const approved = await selfLogin(context, origin, response, "/api/agent/email/verify", wanted);
+	removeEmailFlow(context.env, origin, email);
+	return approved;
 }
 async function login(flags) {
 	const here = findRepository(this);
 	const origin = normalizeOrigin(flags.url ?? this.env.BRAID_URL ?? here?.link?.url ?? fail("Give your Braid address: braid login --url https://braid.example"));
-	const approved = await deviceLogin(this, origin, flags.workspace ?? here?.link?.workspaceId);
+	if (flags.code !== void 0 && flags.email === void 0) fail("--code goes with the --email the code was sent to.");
+	if (flags.link && flags.email !== void 0) fail("Choose --email or --link, not both.");
+	if (flags.repository !== void 0 && flags.workspace !== void 0) fail("Choose --workspace or --repository, not both.");
+	if (flags.repository !== void 0 && !/^[^/\s]+\/[^/\s]+$/.test(flags.repository)) fail("Name the repository as OWNER/REPO.");
+	const wanted = {
+		workspace: flags.workspace ?? (flags.repository ? void 0 : here?.link?.workspaceId),
+		repository: flags.repository
+	};
+	const approved = flags.email !== void 0 ? await emailLogin(this, origin, flags.email, flags.code, wanted) : await agentLogin(this, origin, wanted, flags.link);
+	if (!approved) return;
 	if (here) startActivityUpload(this, here.root);
 	print(this, `Signed in to ${origin} for repository ${approved.workspaceId} until ${day(approved.expiresAt)}.${here && !here.link ? " Run braid init to link this repository." : ""}`);
 }
@@ -6428,21 +6635,30 @@ async function whoami(flags) {
 	}
 	for (const row of columns(rows, (cell, _column, index) => index === 0 ? paint.dim(cell) : cell)) print(this, row);
 }
+const text$2 = (brief, placeholder) => ({
+	kind: "parsed",
+	parse: String,
+	brief,
+	placeholder,
+	optional: true
+});
 const loginCommand = buildCommand({
 	func: login,
 	parameters: { flags: {
 		url,
-		workspace: {
-			kind: "parsed",
-			parse: String,
-			brief: "Require this repository id when the owner approves",
-			placeholder: "id",
+		workspace: text$2("Require this repository id", "id"),
+		repository: text$2("Connect this repository, by its OWNER/REPO address", "owner/repo"),
+		email: text$2("Sign in with a code Braid emails to this address; run again with --code", "address"),
+		code: text$2("The code from the email, as the person reads it out", "code"),
+		link: {
+			kind: "boolean",
+			brief: "Skip the GitHub CLI and show a link for the owner to approve",
 			optional: true
 		}
 	} },
 	docs: {
-		brief: "Sign in with an owner-approved code",
-		fullDescription: "Shows a page and code for the repository owner to approve, then saves the approval with owner-only permissions where braid.mjs keeps its own, so both tools share it. Tokens never appear in arguments or output; BRAID_ACCESS_TOKEN and BRAID_WORKSPACE_ID override the saved approval."
+		brief: "Sign in for the person, and sign them up when they are new",
+		fullDescription: "Signs in with the GitHub CLI's account when gh is signed in, with a code Braid emails the person (--email, then --code), or with a page and code the person approves. The approval is saved with owner-only permissions where braid.mjs keeps its own, so both tools share it. Tokens never appear in arguments or output; BRAID_ACCESS_TOKEN and BRAID_WORKSPACE_ID override the saved approval."
 	}
 });
 const logoutCommand = buildCommand({
@@ -7120,9 +7336,9 @@ function checkProposal(body, bases, secrets) {
 	assertSubmittable(payload, secrets);
 	return payload;
 }
-/** The approval for a task's repository, asking the owner for one when none is saved. */
+/** The approval for a task's repository, signing in for the person when none is saved. */
 async function approved(context, home, workspaceId) {
-	if (!context.env.BRAID_ACCESS_TOKEN && !savedCredentials(context.env, home).some((saved) => (!workspaceId || saved.workspaceId === workspaceId) && Date.parse(saved.expiresAt ?? "") > context.now())) await deviceLogin(context, home, workspaceId);
+	if (!context.env.BRAID_ACCESS_TOKEN && !savedCredentials(context.env, home).some((saved) => (!workspaceId || saved.workspaceId === workspaceId) && Date.parse(saved.expiresAt ?? "") > context.now())) await agentLogin(context, home, { workspace: workspaceId });
 	return loadCredentials(context, home, workspaceId);
 }
 function checkoutCredentials(context, task) {
@@ -7242,7 +7458,7 @@ async function startTask(context, input) {
 	const read = () => send(context, `${link.origin}/api/state`, { headers: connection(credentials) });
 	let response = await read();
 	if (response.status === 401 && !context.env.BRAID_ACCESS_TOKEN) {
-		await deviceLogin(context, link.origin, credentials.workspaceId);
+		await agentLogin(context, link.origin, { workspace: credentials.workspaceId });
 		credentials = loadCredentials(context, link.origin, credentials.workspaceId);
 		response = await read();
 	}

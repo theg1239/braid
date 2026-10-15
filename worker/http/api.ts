@@ -14,6 +14,7 @@ import { changesRoute, type ChangeGateway } from '../changes/router';
 import { ACCESS_LIFETIME, ACCESS_PREFIX, fleetAgent, mintAccess } from './agent-token';
 import { githubWebhook } from '../github/webhook';
 import { handleMcp, rpcMessage, type ApiCall } from './mcp';
+import { crossOrigin, mcpChallenge, mcpCredential, oauthConsentRoute, oauthRoute } from './oauth';
 import { repositoryFromStatuses } from '../changes/ci';
 import { repositoryKey, trunkOf } from '../changes/names';
 import * as v from 'valibot';
@@ -44,6 +45,14 @@ function headers(response: Response, request: Request, requestId: string) {
   for (const [name, value] of Object.entries(securityHeaders)) result.headers.set(name, value);
   result.headers.set('x-request-id', requestId);
   if (result.status === 429 && !result.headers.has('retry-after')) result.headers.set('retry-after', '60');
+  // MCP clients that run in a web page reach /mcp and OAuth with bearer tokens only, never with a session cookie.
+  if (crossOrigin(pathname)) {
+    result.headers.set('access-control-allow-origin', '*');
+    result.headers.set('access-control-allow-methods', 'GET, POST, OPTIONS');
+    result.headers.set('access-control-allow-headers', 'authorization, content-type, mcp-protocol-version, x-braid-workspace');
+    result.headers.set('access-control-expose-headers', 'www-authenticate');
+    result.headers.set('access-control-max-age', '86400');
+  }
   if (protocol === 'https:') result.headers.set('strict-transport-security', 'max-age=31536000');
   // Pages and static files are normally served without the Worker, with these headers from public/_headers.
   // API answers are never cached, except content-addressed evidence images, which say so themselves.
@@ -71,21 +80,37 @@ export default {
   },
 } satisfies ExportedHandler<BraidEnv>;
 
-/** Braid as an MCP server: each tool is a request to this API with the caller's own credentials and address. */
+/**
+ * Braid as an MCP server: each tool is a request to this API with the caller's own credentials and address. A missing,
+ * invalid or too narrow credential answers as OAuth asks (RFC 6750), so MCP clients can authorize and try again.
+ */
 async function mcp(request: Request, env: BraidEnv, url: URL): Promise<Response> {
-  if (request.method !== 'POST') return new Response(null, { status: 405, headers: { allow: 'POST' } });
-  const forward = ['authorization', 'x-braid-workspace', 'cf-connecting-ip'].flatMap(name => { const value = request.headers.get(name); return value ? [[name, value] as [string, string]] : []; });
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+  if (request.method !== 'POST') return new Response(null, { status: 405, headers: { allow: 'POST, OPTIONS' } });
+  let json: unknown;
+  try { json = await request.json(); } catch { return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Send one JSON-RPC message.' } }, { status: 400 }); }
+  const message = v.safeParse(rpcMessage, json);
+  if (!message.success) return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Send one JSON-RPC message.' } }, { status: 400 });
+  const presented = request.headers.get('authorization');
+  const credential = presented ? await mcpCredential(env, url, presented) : null;
+  const refuse = (status: 401 | 403, error: string, code?: 'invalid_token' | 'insufficient_scope') =>
+    Response.json({ error }, { status, headers: { 'www-authenticate': mcpChallenge(env, url, code && { code, description: code === 'invalid_token' ? 'The access token is invalid, expired or revoked.' : 'This tool needs work access.' }) } });
+  if (credential && !credential.ok) return refuse(401, credential.description, 'invalid_token');
+  const forward = ['x-braid-workspace', 'cf-connecting-ip'].flatMap(name => { const value = request.headers.get(name); return value ? [[name, value] as [string, string]] : []; });
+  if (credential) forward.push(['authorization', credential.authorization]);
   const api: ApiCall = async (method, path, body, key) => {
     const response = await route(new Request(new URL(path, url.origin), { method, body: body === undefined ? undefined : JSON.stringify(body),
       headers: { ...Object.fromEntries(forward), origin: url.origin, ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(key ? { 'idempotency-key': key } : {}) } }), env);
     return { status: response.status, data: await response.json().catch(() => null) };
   };
-  let json: unknown;
-  try { json = await request.json(); } catch { return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Send one JSON-RPC message.' } }, { status: 400 }); }
-  const message = v.safeParse(rpcMessage, json);
-  if (!message.success) return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Send one JSON-RPC message.' } }, { status: 400 });
-  const result = await handleMcp(message.output, api, request.headers.has('authorization'));
-  return result ? Response.json(result) : new Response(null, { status: 202 });
+  try {
+    const result = await handleMcp(message.output, api, !!credential, { ...(credential ? { scope: credential.scope } : {}), workspace: request.headers.has('x-braid-workspace') });
+    return result ? Response.json(result) : new Response(null, { status: 202 });
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 401) return refuse(401, error.message, presented ? 'invalid_token' : undefined);
+    if (error instanceof HttpError && error.code === 'insufficient_scope') return refuse(403, error.message, 'insufficient_scope');
+    throw error;
+  }
 }
 
 /** Only resource answers get browser links; file contents and failed requests are never rewritten. */
@@ -199,6 +224,8 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
   const guide = request.method === 'GET' ? setupGuide(url.pathname, env.PUBLIC_ORIGIN || url.origin, url.searchParams) : null;
   if (guide) return guideResponse(request, guide, env.PUBLIC_ORIGIN || url.origin, env.BUILD_ID ?? 'dev');
   if (url.pathname === '/mcp') return mcp(request, env, url);
+  const oauth = await oauthRoute(request, env, url);
+  if (oauth) return oauth;
   if (!url.pathname.startsWith('/api/') && !git) return servePage(request, env);
   // Signed by GitHub rather than a browser session, so it precedes origin and session checks.
   if (url.pathname === '/api/github/webhook' && request.method === 'POST') return githubWebhook(request, env);
@@ -321,6 +348,10 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
       agentWorkspace = credential.workspace; user = credential.user;
     }
     if (url.pathname.startsWith('/api/agent/')) return agentAuthorization(request, env, ip, user);
+    if (url.pathname === '/api/oauth/authorize') {
+      if (agentScope) throw new HttpError(403, 'Only a person authorizes MCP clients.');
+      return oauthConsentRoute(request, env, url, user);
+    }
     if (url.pathname.startsWith('/api/github/')) {
       if (!user) throw new HttpError(401, 'Sign in to connect a GitHub repository.');
       if (agentScope) throw new HttpError(403, 'Choose and authorize GitHub repositories in Braid.');

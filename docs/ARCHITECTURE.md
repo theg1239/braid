@@ -12,7 +12,7 @@ Each Worker folder owns a domain and its tests:
 
 | Folder | Responsibility |
 | --- | --- |
-| `worker/http/` | API gateway, sign-in, agent tokens, authorization, public reads, and MCP. |
+| `worker/http/` | API gateway, sign-in, agent tokens, authorization, public reads, MCP, and OAuth for MCP clients. |
 | `worker/accounts/` | Directory and Security objects, organizations, repositories, sessions, secrets, OAuth, email, passkeys, and notifications. |
 | `worker/workspace/` | Workspace object, task Workflow, integration, local agents, and example seed. |
 | `worker/repositories/` | Trees, commits, comparisons, history, branches, search, and provenance. |
@@ -261,6 +261,42 @@ Limits:
 Standalone owner-key deployments remain supported. Owner keys and Artifacts tokens stay out of snapshots, logs, Git, and source archives. Server-side write tokens are revoked after use.
 
 Approved local work connections can obtain a 10-minute read token for one fork. The CLI uses a temporary Git askpass environment. It does not put the token in a remote URL or file.
+
+### Agents that sign up
+
+An agent can connect without a browser. The proof of the person stands in for the approval click.
+
+- `POST /api/agent/github` takes the token of the GitHub CLI. Braid reads `/user`, and `/user/emails` when the token allows it. Without the `user:email` scope, Braid uses the profile email, which GitHub allows only from verified addresses.
+- Braid signs the person in, or creates the account, by the rules of GitHub sign-in. It never stores or logs the GitHub token. Each network address gets 10 attempts in an hour.
+- `POST /api/agent/email/start` emails a code for the requested access. `POST /api/agent/email/verify` takes the code. Codes last 10 minutes and allow 5 attempts. They share the limits of browser sign-in. A browser code does not work for an agent, and an agent code does not work in a browser.
+- The answer is a connection to one repository that the person can write: the named repository, or the only one. Otherwise HTTP 409 lists the repositories of the person, or asks for one. An email code stays valid for that second try.
+- The scopes are read, setup and work. Fleet access needs an approval in the browser. The lifetimes are the same as for approved connections.
+- The connection has the limits of an approved connection. Repository writes still go through the merge queue, which rechecks the owner who enabled it before every push.
+
+### OAuth for MCP clients
+
+Braid is the OAuth 2.1 authorization server for its own MCP endpoint, as the [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization) requires. `worker/http/oauth.ts` implements it with Web Crypto.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `/.well-known/oauth-protected-resource`, also with `/mcp` | Protected resource metadata (RFC 9728). The resource is `{origin}/mcp`. |
+| `/.well-known/oauth-authorization-server` | Server metadata (RFC 8414): PKCE S256 only, client ID metadata documents, and the scopes `read` and `work`. |
+| `POST /oauth/register` | Dynamic client registration (RFC 7591). A public client gets no secret. A confidential client gets a secret, which Braid keeps as a digest. |
+| `/oauth/authorize` | The consent page in the app. `GET /api/oauth/authorize` reads the request, and `POST` answers it for a signed-in person. |
+| `POST /oauth/token` | Authorization codes with their PKCE verifier, and refresh tokens. |
+| `POST /oauth/revoke` | Revocation (RFC 7009) of a refresh token or an access token, with its grant. |
+
+- A tool call without a token gets HTTP 401 with `WWW-Authenticate: Bearer resource_metadata="…"`. `initialize`, `tools/list` and read tools on a public repository stay open.
+- A client ID can be the HTTPS address of a client metadata document. Braid fetches it without redirects, only from a host name, and reads at most 16 KiB. It keeps a valid document for its cache lifetime, at most 1 day.
+- A redirect must match a registered address exactly. A loopback redirect can use any port (RFC 8252). HTTPS, loopback HTTP and app schemes are allowed. The consent page shows where the browser returns, and it warns about a loopback redirect.
+- A bad client or redirect shows an error, and Braid does not redirect. Other problems return to the client with `error` and `iss`.
+- Codes last 5 minutes and work once. A second use revokes the grant from the first use.
+- An approval is an agent grant for one repository, as a device approval is. The person must be able to write the repository. The grant lasts 30 days after its last refresh.
+- An access token lasts 1 hour. Its own signing key and its `aud` claim bind it to `/mcp`, so the rest of the API refuses it. For each tool call, `/mcp` changes it into a 5-minute agent token of the same grant. The gateway then checks membership, revocation and scope, as for other agents.
+- A read token that calls a write tool gets HTTP 403 with `error="insufficient_scope"`.
+- Each refresh issues a new refresh token. The token before it stays valid until the client uses the new one, so a client can retry after a lost answer. A retired token, or a token from another client, revokes the grant.
+- Security keeps clients, codes and refresh tokens only as SHA-256 digests. Settings › Agents lists the grant. Its revocation ends all of its tokens.
+- A grant names one repository. Braid has no grant for all the repositories of a person, so every check stays the same as for an approved connection.
 
 ## Repository imports and browsing
 

@@ -7,7 +7,7 @@ import { command, describeChange, describeComments, checkoutArgs, nextStep, poll
 import { checkoutRoot, collectProposal, pinnedBase } from './checkout';
 import { withLock } from './repository';
 import { decodeText, LIMITS, readTests, validPath } from './collect';
-import { deviceLogin } from './commands/login';
+import { agentLogin } from './commands/login';
 import { CliError, fail, print, type BraidContext } from './context';
 import { ID, loadCredentials, normalizeOrigin, originOf, privateDirectory, readPrivateJson, realDirectory, savedCredentials, writePrivate, writePrivateJson, type Credentials } from './config';
 import { fetchCommit, hasCommit, isAncestor, strict, strictGit, httpsRemote } from './git';
@@ -213,9 +213,9 @@ function checkProposal(body: string, bases: (string | undefined)[], secrets: rea
 
 /* ---------- the commands ---------- */
 
-/** The approval for a task's repository, asking the owner for one when none is saved. */
+/** The approval for a task's repository, signing in for the person when none is saved. */
 async function approved(context: BraidContext, home: string, workspaceId?: string) {
-  if (!context.env.BRAID_ACCESS_TOKEN && !savedCredentials(context.env, home).some(saved => (!workspaceId || saved.workspaceId === workspaceId) && Date.parse(saved.expiresAt ?? '') > context.now())) await deviceLogin(context, home, workspaceId);
+  if (!context.env.BRAID_ACCESS_TOKEN && !savedCredentials(context.env, home).some(saved => (!workspaceId || saved.workspaceId === workspaceId) && Date.parse(saved.expiresAt ?? '') > context.now())) await agentLogin(context, home, { workspace: workspaceId });
   return loadCredentials(context, home, workspaceId);
 }
 function checkoutCredentials(context: BraidContext, task: Task) {
@@ -292,7 +292,7 @@ export async function startTask(context: BraidContext, input: { link: string; di
   const read = () => send(context, `${link.origin}/api/state`, { headers: connection(credentials) });
   let response = await read();
   if (response.status === 401 && !context.env.BRAID_ACCESS_TOKEN) {
-    await deviceLogin(context, link.origin, credentials.workspaceId);
+    await agentLogin(context, link.origin, { workspace: credentials.workspaceId });
     credentials = loadCredentials(context, link.origin, credentials.workspaceId);
     response = await read();
   }

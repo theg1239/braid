@@ -15,12 +15,20 @@ export function temporary(prefix = 'braid-test-') {
 }
 export const cleanup = () => { for (const folder of scratch.splice(0)) rmSync(folder, { recursive: true, force: true }); };
 
-/** An environment that ignores this machine's Git and Braid configuration. */
-export function environment(home: string, extra: Record<string, string> = {}): Record<string, string> {
+/** An environment that ignores this machine's Git, GitHub CLI and Braid configuration. */
+export function environment(home: string, { PATH = githubCli(home, null), ...extra }: Record<string, string> = {}): Record<string, string> {
   return {
-    PATH: process.env.PATH ?? '', HOME: home, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
+    PATH, HOME: home, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
     BRAID_CONFIG_HOME: join(home, 'config'), LANG: 'C', TZ: 'UTC', ...extra,
   };
+}
+
+/** A GitHub CLI first on PATH that prints `token` for `gh auth token`, or answers as a signed-out gh does when it is null. */
+export function githubCli(home: string, token: string | null) {
+  const bin = join(home, token ? 'fake-gh' : 'fake-gh-signed-out');
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, 'gh'), token ? `#!/bin/sh\n[ "$1 $2" = "auth token" ] || exit 1\nprintf '%s\\n' ${JSON.stringify(token)}\n` : '#!/bin/sh\necho "You are not logged into any GitHub hosts." >&2\nexit 1\n', { mode: 0o755 });
+  return `${bin}:${process.env.PATH ?? ''}`;
 }
 
 interface Person { name: string; email: string }

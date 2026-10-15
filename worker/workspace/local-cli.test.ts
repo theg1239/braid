@@ -208,7 +208,7 @@ describe('owner-approved device connection', () => {
       .mockResolvedValueOnce(Response.json({ status: 'pending' }, { status: 202, headers: { 'retry-after': '7' } }))
       .mockResolvedValueOnce(Response.json({ status: 'slow_down' }, { status: 429, headers: { 'retry-after': '15' } }))
       .mockResolvedValueOnce(Response.json(grant()));
-    await cli.connect(origin, { env: settings, fetch, log, now: () => now, sleep: async (ms: number) => { waits.push(ms); now += ms; } });
+    await cli.connect(origin, { env: settings, fetch, log, now: () => now, sleep: async (ms: number) => { waits.push(ms); now += ms; } }, undefined, { link: true });
     expect(waits).toEqual([2000, 7000, 15000]);
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ name: 'Local coding agent', scope: 'work' });
     expect(fetch.mock.calls.map(call => call[0])).toEqual([`${origin}/api/agent/requests`, ...Array(3).fill(`${origin}/api/agent/token`)]);
@@ -227,7 +227,7 @@ describe('owner-approved device connection', () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(Response.json({ deviceCode: 'device-code-0123456789', userCode: 'ABCD2345', verificationUri: `${origin}/?connect=ABCD2345`, expiresIn: 3, interval: 1 }))
       .mockResolvedValueOnce(Response.json({ status: state }, state === 'denied' ? { status: 410 } : { status: 202, headers: { 'retry-after': '10' } }));
-    await expect(cli.connect(origin, { env: {}, fetch, log: vi.fn(), now: () => now, sleep: async (ms: number) => { now += ms; } })).rejects.toThrow(/expired|denied/);
+    await expect(cli.connect(origin, { env: {}, fetch, log: vi.fn(), now: () => now, sleep: async (ms: number) => { now += ms; } }, undefined, { link: true })).rejects.toThrow(/expired|denied/);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -237,7 +237,7 @@ describe('owner-approved device connection', () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(Response.json({ deviceCode: 'private-device-code-for-connect', userCode: 'ABCD2345', verificationUri: `${origin}/?connect=ABCD2345`, expiresIn: 120, interval: 1 }))
       .mockResolvedValueOnce(Response.json(grant()));
-    await expect(cli.main(['connect', '--url', origin, '--workspace', 'workspace-two'], { env: settings, fetch, log, now: () => now, sleep: async (ms: number) => { now += ms; } }))
+    await expect(cli.main(['connect', '--url', origin, '--workspace', 'workspace-two', '--link'], { env: settings, fetch, log, now: () => now, sleep: async (ms: number) => { now += ms; } }))
       .rejects.toThrow(/approved repository workspace-one, but workspace-two is required/);
     // The approval page is unchanged; the owner still chooses the repository there.
     expect(log.mock.calls.flat().join('\n')).toContain(`Approve this connection in Braid: ${origin}/?connect=ABCD2345\n`);
@@ -370,7 +370,7 @@ describe('start from a task link', () => {
     expect(renewalSnapshot(dir)).toEqual(before);
   });
 
-  it('requests approval for the task repository only when no approval is saved', async () => {
+  it('asks for email without credentials and resumes after explicit approval', async () => {
     const { dir, baseCommit } = repository();
     let now = Date.now();
     const fetch = vi.fn()
@@ -379,6 +379,9 @@ describe('start from a task link', () => {
       .mockResolvedValueOnce(Response.json(snapshot('working')))
       .mockResolvedValueOnce(Response.json(checkoutDetails(baseCommit)));
     const settings = { BRAID_CONFIG_HOME: join(root, 'first-connection') };
+    await expect(cli.start({ task: link, dir }, { env: settings, fetch, log: vi.fn() })).rejects.toThrow('run connect --email ADDRESS');
+    expect(fetch).not.toHaveBeenCalled();
+    await cli.connect(origin, { env: settings, fetch, log: vi.fn(), now: () => now, sleep: async (ms: number) => { now += ms; } }, 'workspace-one', { link: true });
     await cli.start({ task: link, dir }, { env: settings, fetch, log: vi.fn(), now: () => now, sleep: async (ms: number) => { now += ms; } });
     expect(fetch.mock.calls.map(call => call[0])).toEqual([`${origin}/api/agent/requests`, `${origin}/api/agent/token`, `${origin}/api/state`, `${origin}/api/missions/mission-one/agents/coder/checkout`]);
     expect(existsSync(cli.credentialFile(origin, settings, 'workspace-one'))).toBe(true);

@@ -835,7 +835,7 @@ export class Directory extends DurableObject<BraidEnv> {
     if (due !== null) await this.ctx.storage.setAlarm(Math.max(Date.now() + 1000, due));
   }
   private notificationRecipient(userId: string, workspaceId: string, kind: NotificationKind) {
-    return this.ctx.storage.sql.exec<{ email: string; person: string; owner: string; repo: string }>(`SELECT u.email, p.public_id AS person, t.slug AS owner, w.slug AS repo FROM users u JOIN public_people p ON p.user_id = u.id JOIN members m ON m.user_id = u.id JOIN teams t ON t.id = m.team_id JOIN workspaces w ON w.team_id = t.id WHERE u.id = ? AND w.id = ? AND ${kind === 'attention' ? "m.role = 'owner' AND u.notify_attention = 1" : 'u.notify_returned = 1'}`, userId, workspaceId).toArray()[0];
+    return this.ctx.storage.sql.exec<{ email: string; person: string; owner: string; repo: string }>(`SELECT u.email, p.public_id AS person, t.slug AS owner, w.slug AS repo FROM users u JOIN public_people p ON p.user_id = u.id JOIN members m ON m.user_id = u.id JOIN teams t ON t.id = m.team_id JOIN workspaces w ON w.team_id = t.id WHERE u.id = ? AND w.id = ? AND u.email <> '' AND ${kind === 'attention' ? "m.role = 'owner' AND u.notify_attention = 1" : 'u.notify_returned = 1'}`, userId, workspaceId).toArray()[0];
   }
   async alarm(): Promise<void> {
     const sql = this.ctx.storage.sql;
@@ -895,6 +895,12 @@ export class Directory extends DurableObject<BraidEnv> {
     const teams = this.ctx.storage.sql.exec<{ id: string; name: string; slug: string; role: OrganizationRole }>("SELECT t.id, t.name, t.slug, m.role FROM teams t JOIN members m ON m.team_id = t.id WHERE m.user_id = ? AND t.kind = 'organization' ORDER BY t.created_at, t.id", user.id).toArray();
     return teams.map(team => ({ ...team, workspaces: this.workspaces(team.id).filter(workspace => !this.mirrorRecord(workspace.id)).map(workspace => ({ ...workspace, canWrite: this.repositoryWriter(user.id, team.id, workspace.id, team.role) })) }));
   }
+  /** The repositories this person can write, personal first, as an agent that connects for them may name them. */
+  writableRepositories(user: AccountIdentity): { workspaceId: string; address: string }[] {
+    const personal = this.personalOwner(user.id);
+    return [...(personal ? [personal] : []), ...this.list(user)].flatMap(owner => owner.workspaces.filter(workspace => workspace.canWrite)
+      .map(workspace => ({ workspaceId: workspace.id, address: `${owner.slug}/${workspace.slug}` })));
+  }
   private workspaces(teamId: string): RepositoryWorkspace[] {
     return this.ctx.storage.sql.exec<{ id: string; organizationId: string; name: string; slug: string; visibility: Visibility; createdAt: string }>('SELECT id, team_id AS organizationId, name, slug, visibility, created_at AS createdAt FROM workspaces WHERE team_id = ? ORDER BY created_at, id', teamId).toArray();
   }
@@ -932,6 +938,16 @@ export class Directory extends DurableObject<BraidEnv> {
       }
       const team = this.ctx.storage.sql.exec<{ id: string; name: string; slug: string }>('SELECT id, name, slug FROM teams WHERE id = ?', teamId).one();
       return { ...team, role, workspaces: this.workspaces(teamId).filter(workspace => !this.mirrorRecord(workspace.id)) };
+    });
+  }
+  /** Idempotent agent onboarding creates only in this person's private namespace. */
+  ensureAgentRepository(user: AccountIdentity, name: string) {
+    return this.ctx.storage.transactionSync(() => {
+      const account = this.account(user);
+      const personal = account.personalOwner ?? this.setUsername(user, account.usernameSuggestion!).personalOwner;
+      const existing = personal.workspaces.find(repo => repo.slug === name || repo.name === name);
+      const workspace = existing ?? this.createWorkspace(user.id, personal.id, name, 'private');
+      return { workspaceId: workspace.id, created: !existing, user: this.identity(user) };
     });
   }
   createWorkspace(userId: string, teamId: string, name: string, visibility?: Visibility): RepositoryWorkspace {

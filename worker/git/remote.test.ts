@@ -94,6 +94,30 @@ async function remote() {
 }
 
 describe('Braid as a Git remote', () => {
+  it.each(['setup', 'work'] as const)('%s initializes only an empty main using CAS and cannot replace existing history', async scope => {
+    const { harness, origin, work, git, local, connection, url, commit } = await remote();
+    const workToken = await connection();
+    expect((await git(['clone', '-q', url(workToken), 'client'], work)).status).toBe(0);
+    const tip = commit('local.txt', 'local checkout', 'Initial local history');
+    harness.git.native(['update-ref', '-d', 'refs/heads/main']);
+    harness.workspace.repository.mockImplementation(async () => ({ id: 'repo', branch: 'main', remote: harness.git.remote, head: '' }));
+    Object.assign(harness.workspace, { agentInitializationAllowed: async () => true, finishAgentInitialization: async () => {} });
+    const setup = scope === 'work' ? workToken : await connection(scope);
+    const initialized = await git(['push', '--force-with-lease=refs/heads/main:', url(setup), 'HEAD:refs/heads/main']);
+    expect(initialized.status, initialized.stderr).toBe(0);
+    expect(harness.git.native(['rev-parse', 'main']).trim()).toBe(tip);
+    const later = commit('local.txt', 'later work', 'Later work');
+    expect((await git(['push', '--force', url(setup), 'HEAD:refs/heads/main'])).status).not.toBe(0);
+    expect((await git(['push', url(setup), 'HEAD:refs/for/main'])).status).not.toBe(0);
+    expect(harness.git.native(['rev-parse', 'main']).trim()).toBe(tip);
+    // Even a manually constructed zero-old command cannot win after initialization.
+    const body = new Blob([pktLine(`${ZERO} ${later} refs/heads/main\0report-status\n`), FLUSH] as BlobPart[]);
+    const response = await fetch(`${origin}/git/w.git/git-receive-pack`, { method: 'POST', headers: { authorization: `Basic ${btoa(`x:${setup}`)}`, 'content-type': 'application/x-git-receive-pack-request' }, body });
+    expect(await response.text()).toContain('ng refs/heads/main');
+    expect(harness.git.native(['rev-parse', 'main']).trim()).toBe(tip);
+    expect(local(['rev-parse', 'HEAD']).stdout.trim()).toBe(later);
+  });
+
   it('clones and fetches a public repository anonymously while push still requires work access', async () => {
     const { harness, directory, base, origin, work, git, local, commit, token, url } = await remote();
     const activity = vi.spyOn(directory, 'repositoryActivity');

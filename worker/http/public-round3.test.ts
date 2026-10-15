@@ -355,6 +355,24 @@ it('migrates unambiguous stored roster keys and line counts without changing pub
   } finally { await f.close(); }
 });
 
+it("lets only the operator's seeding key past a spent network admission budget", async () => {
+  const originalFetch = globalThis.fetch;
+  vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => String(input).startsWith('https://github.com/')
+    ? Promise.resolve(new Response('', { status: 401 })) : originalFetch(input, init));
+  const f = await publicRepository();
+  try {
+    const key = 'k'.repeat(40);
+    f.env.ANONYMOUS_LIMITER = undefined; f.env.MIRROR_SEED_TOKEN = key;
+    for (let i = 0; i < MIRROR_NETWORK_LIMIT; i++) expect((await call(f, `/api/repos/missing/repo-${i}`)).status).toBe(404);
+    expect((await call(f, '/api/repos/missing/visitor')).status).toBe(429);
+    expect((await call(f, '/api/repos/missing/guess', { 'x-braid-mirror-seed': 'k'.repeat(39) })).status).toBe(429);
+    // Past the budget, the GitHub lookup itself answers: this source does not exist.
+    expect((await call(f, '/api/repos/missing/seeded', { 'x-braid-mirror-seed': key })).status).toBe(404);
+    f.env.MIRROR_SEED_TOKEN = 'short';
+    expect((await call(f, '/api/repos/missing/short-key', { 'x-braid-mirror-seed': 'short' })).status).toBe(429);
+  } finally { await f.close(); }
+});
+
 it('charges unknown repository addresses before their lookup and leaves member addresses exempt', async () => {
   const originalFetch = globalThis.fetch;
   vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => String(input).startsWith('https://github.com/')

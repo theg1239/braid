@@ -177,6 +177,21 @@ export function loadCredentials(context: BraidContext, origin: string, workspace
   return fail(saved.length ? `Your Braid approval for ${origin} expired. Run braid login again.` : `Not signed in to ${origin}. Run braid login${wanted ? '' : ` --url ${origin}`}.`);
 }
 
+/* ---------- a code Braid emailed ---------- */
+
+const emailFlow = v.object({ origin: v.string(), flowId: v.pipe(v.string(), v.uuid()), expiresAt: v.pipe(v.string(), v.check(value => Number.isFinite(Date.parse(value)))) });
+export type EmailFlow = v.InferOutput<typeof emailFlow>;
+/** Where a code Braid emailed waits for the person to read it out, beside the origin's approvals, under a name none has. */
+const emailFlowFile = (env: BraidContext['env'], origin: string, email: string) => join(configRoot(env), sha256(normalizeOrigin(origin)), `email-${sha256(email.trim().toLowerCase())}.json`);
+export function saveEmailFlow(env: BraidContext['env'], email: string, flow: EmailFlow) {
+  const path = emailFlowFile(env, flow.origin, email);
+  privateDirectory(dirname(dirname(path)));
+  privateDirectory(dirname(path));
+  writePrivateJson(path, flow);
+}
+export const readEmailFlow = (env: BraidContext['env'], origin: string, email: string) => readPrivateJson(emailFlowFile(env, origin, email), emailFlow, { max: 4096, label: 'The saved email code request' });
+export const removeEmailFlow = (env: BraidContext['env'], origin: string, email: string) => rmSync(emailFlowFile(env, origin, email), { force: true });
+
 /** Deletes saved approvals for an origin, or one repository at it, and returns how many were removed. */
 export function removeCredentials(env: BraidContext['env'], origin: string, workspaceId?: string) {
   const records = savedCredentials(env, origin).filter(record => !workspaceId || record.workspaceId === workspaceId);

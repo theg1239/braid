@@ -14,8 +14,8 @@ const LOGOS = [
 /** How long the pill says it copied, as Cloudflare's does. */
 const COPIED_MS = 1500;
 
-/** What the pill copies: the instructions this deployment serves, for whichever agent reads them. */
-export const setupPrompt = () => `Fetch and follow the instructions to set me up for Braid from ${window.location.origin}/setup.md`;
+/** What the pill copies: the instructions this deployment serves, and how the agent signs the person up on its own. */
+export const setupPrompt = () => `Set me up for Braid by following ${window.location.origin}/setup.md. Sign me up or in with the GitHub CLI if gh is signed in; otherwise ask me for my email address, then for the code Braid emails me.`;
 
 /**
  * Cloudflare's Copy prompt pill, as developers.cloudflare.com draws it: four agents' marks and two words. A click

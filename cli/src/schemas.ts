@@ -43,6 +43,11 @@ export const grant = v.object({
   accessToken: token, tokenType: v.literal('Bearer'), expiresAt: time, workspaceId: id,
   scope: v.picklist(['read', 'setup', 'work', 'fleet']),
 });
+/** A connection for the person's own proof also names its repository by address. */
+export const selfGrant = v.object({ ...grant.entries, created: v.optional(v.boolean()), initialization: v.optional(v.object({ accessToken: v.string(), branch: v.literal('main') })), repository: v.pipe(v.string(), v.regex(/^[^/\s]+\/[^/\s]+$/)) });
+/** Without one repository to connect, Braid says why and lists the person's repositories to choose from. */
+export const repositoryChoice = v.object({ error: v.string(), repositories: v.array(v.string()) });
+export const emailStarted = v.object({ flowId: v.pipe(v.string(), v.uuid()), expiresAt: time });
 /** A five-minute access token exchanged for the saved connection, and the agent identity Braid gives it. */
 export const access = v.object({
   accessToken: v.pipe(token, v.startsWith('braid_at_')), tokenType: v.literal('Bearer'), expiresAt: time,

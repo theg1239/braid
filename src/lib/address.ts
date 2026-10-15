@@ -6,7 +6,7 @@
 import { RESERVED_OWNERS, SLUG } from '../../shared/routes';
 
 /** The repository's screens, and the site's: home (the landing page or the dashboard), Explore and sign-in. */
-export type Screen = 'account' | 'username' | 'organizations' | 'home' | 'explore' | 'signin' | 'new' | 'new-organization' | 'organization' | 'owner' | 'code' | 'search' | 'global-search' | 'commits' | 'commit' | 'branches' | 'compare' | 'pulls' | 'pull' | 'queue' | 'agents' | 'task' | 'review' | 'settings' | 'not-found';
+export type Screen = 'account' | 'username' | 'organizations' | 'home' | 'explore' | 'signin' | 'authorize' | 'new' | 'new-organization' | 'organization' | 'owner' | 'code' | 'search' | 'global-search' | 'commits' | 'commit' | 'branches' | 'compare' | 'pulls' | 'pull' | 'queue' | 'agents' | 'task' | 'review' | 'settings' | 'not-found';
 
 /** A repository's address: its organization's slug and its own. */
 export interface Address {
@@ -120,6 +120,8 @@ export function parsePath(pathname: string): ParsedPath {
   const segments = segmentsOf(pathname);
   const [first, second] = segments;
   if (segments.length === 2 && first === 'account' && second === 'username') return { ...NONE, screen: 'username', repo: null };
+  // The page an MCP client opens to ask for access over OAuth; the Worker answers the rest of /oauth.
+  if (segments.length === 2 && first === 'oauth' && second === 'authorize') return { ...NONE, screen: 'authorize', repo: null };
   if (segments.length === 2 && first === 'settings' && (second === 'account' || second === 'organizations')) return { ...NONE, screen: second, id: second, repo: null };
   if (!first) return { ...NONE, screen: 'home', repo: null };
   if (first === 'organizations') return { ...NONE, screen: second === 'new' && segments.length === 2 ? 'new-organization' : 'not-found', repo: null };
@@ -138,7 +140,7 @@ export function parsePath(pathname: string): ParsedPath {
 
 /** The repository's screens, which need a workspace; the rest are the site's. */
 export function isRepositoryScreen(screen: Screen): boolean {
-  return screen !== 'global-search' && screen !== 'account' && screen !== 'username' && screen !== 'organizations' && screen !== 'home' && screen !== 'explore' && screen !== 'signin' && screen !== 'new' && screen !== 'owner' && screen !== 'organization' && screen !== 'new-organization' && screen !== 'not-found';
+  return screen !== 'global-search' && screen !== 'account' && screen !== 'username' && screen !== 'organizations' && screen !== 'home' && screen !== 'explore' && screen !== 'signin' && screen !== 'authorize' && screen !== 'new' && screen !== 'owner' && screen !== 'organization' && screen !== 'new-organization' && screen !== 'not-found';
 }
 
 /** An href as a route, resolved against the origin; `legacyRedirect` is applied first. */

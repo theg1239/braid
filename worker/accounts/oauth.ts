@@ -40,13 +40,13 @@ const account = v.object({
   emails: v.array(v.object({ email: v.pipe(v.string(), v.toLowerCase()), verified: v.boolean(), primary: v.boolean() })),
 });
 /** The account a GitHub sign-in names, and the GitHub id and login that give it a no-reply address in commits. */
-export function githubProfile(profile: unknown, addresses: unknown): { identity: AccountIdentity; github: GitHubIdentity } {
+export function githubProfile(profile: unknown, addresses: unknown, allowMissingEmail = false): { identity: AccountIdentity; github: GitHubIdentity } {
   const parsed = v.safeParse(account, { user: profile, emails: addresses });
   if (!parsed.success) throw new HttpError(401, 'GitHub did not return a valid account.');
   const { user, emails } = parsed.output;
   const email = emails.find(entry => entry.verified && entry.primary);
-  if (!email) throw new HttpError(403, 'Verify your primary email address on GitHub before signing in.');
-  return { identity: { id: `github:${user.id}`, email: email.email, name: user.name ? user.name.slice(0, 120) : user.login }, github: { id: user.id, login: user.login } };
+  if (!email && !allowMissingEmail) throw new HttpError(403, 'Verify your primary email address on GitHub before signing in.');
+  return { identity: { id: `github:${user.id}`, email: email?.email ?? '', name: user.name ? user.name.slice(0, 120) : user.login }, github: { id: user.id, login: user.login } };
 }
 
 export async function githubCallback(request: Request, env: BraidEnv): Promise<Response> {

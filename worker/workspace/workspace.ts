@@ -21,7 +21,7 @@ import { integrationAuthors, integrationPreview } from './integration';
 import { AgentError, agentFailure } from '../agents/errors';
 import { hostedLockfiles, hostedPreflight } from '../agents/hosted-preflight';
 import { failure as hostedFailureOf, HostedFailureError, HOSTED_RETRIES, runtimeFailure } from '../agents/hosted-failures';
-import { hostedFailure } from '../schemas';
+import { hostedFailure, agentPublicSource, parseFrom } from '../schemas';
 import { hostedTiming } from '../agents/hosted-limits';
 import { hostedOutput, redactHostedText } from '../agents/hosted-output';
 import type { HostedEnvironment, HostedFacts, HostedFailure, HostedPreflight } from '../../shared/types';
@@ -43,7 +43,7 @@ import type { ComposeReader } from '../repositories/compose';
 import { PublicRevisions, type RevisionScope } from '../repositories/public-revisions';
 import { change, composeChanges, detectCollisions, id, mergeBlocker, now, proposalChecks } from './domain';
 import { artifactsCode, artifactsFailed, errorAnswer, HttpError, logFailure, shown, unwrap } from '../errors';
-import { changeShardOf, repositoryParts, shardOf, submissionShard, trunkOf } from '../changes/names';
+import { changeShardOf, repositoryKey, repositoryParts, shardOf, submissionShard, trunkOf } from '../changes/names';
 import { unresolvedComments } from '../changes/comments';
 import { checkAuthorization, type Authorization } from '../http/authorization';
 import { plural } from '../../shared/labels';
@@ -2424,6 +2424,72 @@ export class Workspace extends DurableObject<BraidEnv> {
   async publicCommits(key: string, hashes: string[], network?: string): Promise<boolean> {
     const scope = this.revisionScope(key, network);
     return !!scope && this.revisions.published(hashes, scope);
+  }
+  /** Agent signup may prepare a public import or a truly empty private repository, never seeded demo files. */
+  async setupAgentRepository(authorization: Authorization, displayName: string, github?: { owner: string; repo: string }): Promise<{ initialize: boolean }> {
+    await checkAuthorization(this.env, authorization);
+    await this.initialize('live');
+    this.repositoryKey = repositoryKey(authorization.teamId, authorization.workspaceId);
+    await this.ctx.storage.put('repository-key', this.repositoryKey);
+    if (this.data.capabilities.mode !== 'live') throw new HttpError(403, 'This is not a live repository.');
+    if (this.data.project.id) {
+      const initialize = await this.agentInitializationAllowed();
+      if (initialize) {
+        using repo = await artifactsOf(this.env).get(this.data.project.id);
+        const head = (await repo.log({ ref: this.data.project.branch, limit: 1 }))[0]?.hash;
+        // The Git CAS may have succeeded before its acknowledgment or publication was interrupted.
+        if (head) { await this.finishAgentInitialization(head); return { initialize: false }; }
+      }
+      return { initialize };
+    }
+    if (this.creating) throw new HttpError(409, 'Repository setup is already running. Retry connect.');
+    if (github) {
+      const response = await fetch(`https://api.github.com/repos/${github.owner}/${github.repo}`, { headers: { 'user-agent': 'Braid', accept: 'application/vnd.github+json' }, redirect: 'error', signal: AbortSignal.timeout(15_000) });
+      if (response.ok) {
+        const source = parseFrom(agentPublicSource, await response.json(), 'GitHub returned invalid repository metadata.');
+        if (!source.private && !source.disabled) {
+          await this.createProject({ name: displayName, sourceUrl: `https://github.com/${github.owner}/${github.repo}.git` }, undefined, authorization);
+          return { initialize: false };
+        }
+      } else { await response.body?.cancel(); if (![403, 404].includes(response.status)) throw new HttpError(502, 'GitHub could not check the import source. Retry connect.'); }
+    }
+    if (await this.ctx.storage.get('pending-project')) throw new HttpError(409, 'The existing import must finish before local initialization. Retry connect.');
+    this.creating = true;
+    try {
+      if (!await this.ctx.storage.get('agent-setup-budget')) {
+        const security = securityOf(this.env);
+        const ownerBudget = await security.consume(`repositories:${authorization.teamId}`, 10, 86_400_000);
+        const globalBudget = await security.consume('repositories:global', 100, 86_400_000);
+        if (!ownerBudget.allowed || !globalBudget.allowed) throw new HttpError(429, 'Repository creation capacity is reached for today.');
+        await this.ctx.storage.put('agent-setup-budget', true);
+      }
+      // Stable name makes interrupted creation recoverable. Only this workspace can own it.
+      const name = `r-${authorization.workspaceId.replaceAll('-', '')}-checkout`;
+      await checkAuthorization(this.env, authorization);
+      try {
+        const created = await artifactsOf(this.env).create(name, { description: '', setDefaultBranch: 'main' });
+        using repo = await artifactsOf(this.env).get(name);
+        await repo.revokeToken(created.token);
+      } catch (error) { if (!artifactsFailed(error, 'ALREADY_EXISTS')) throw error; }
+      using repo = await artifactsOf(this.env).get(name);
+      const info = await repo.info();
+      const head = (await repo.log({ ref: 'main', limit: 1 }))[0]?.hash ?? '';
+      await checkAuthorization(this.env, authorization);
+      this.data.project = { id: name, name: displayName, description: '', remote: info.remote, branch: 'main', head, stack: [] };
+      this.data.files = {};
+      await this.ctx.storage.put('agent-initialization', !head);
+      await this.save();
+      return { initialize: !head };
+    } finally { this.creating = false; }
+  }
+  async agentInitializationAllowed(): Promise<boolean> {
+    return !!this.data?.project.id && !this.data.project.head && await this.ctx.storage.get('agent-initialization') === true;
+  }
+  async finishAgentInitialization(head: string) {
+    await this.trunkAdvanced(head, { batchId: 'setup', landed: 0, ejected: 0, synced: true });
+    const workspaceId = repositoryParts(this.repositoryKey)?.workspaceId;
+    if (workspaceId) await directoryOf(this.env).repositoryImported(workspaceId, undefined, this.data.project.description, true);
+    await this.ctx.storage.delete('agent-initialization');
   }
   /** RPC for the change store and landing queue: the live repository they serve, or null. */
   async repository(): Promise<{ id: string; branch: string; remote: string; head: string } | null> {

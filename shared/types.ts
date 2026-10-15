@@ -38,6 +38,15 @@ export interface HostedFacts {
 export type HostedEnvironment = HostedState & HostedFacts;
 /** `fleet` lets an orchestrator mint a separate identity for each agent it runs under one owner approval. */
 export type AgentScope = 'read' | 'setup' | 'work' | 'fleet';
+/**
+ * An MCP client's OAuth request as its consent page shows it: the name the client gives itself, where the browser
+ * returns (a web host, this computer, or an app's own scheme), the host of its metadata document when it has one, and
+ * the access it asks for. A request that cannot be shown answers `{ redirect }` instead, back to the client.
+ */
+export interface OAuthRequestView {
+  client: { name: string; redirect: { kind: 'web' | 'loopback' | 'app'; host: string }; document: string | null };
+  scope: 'read' | 'work';
+}
 export interface LocalTestReport { command: string; result: 'passed' | 'failed' | 'not-run'; detail?: string }
 export interface FileChange { withheld?: boolean; path: string; before: string; after: string; additions: number; deletions: number; contentRef?: string; beforeHash?: string; afterHash?: string; deleted?: true; mode?: '100644' | '100755' }
 export interface AgentCheck {

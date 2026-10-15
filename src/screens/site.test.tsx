@@ -115,7 +115,8 @@ describe('Sign-in', async () => {
     expect(words).toContain('Continue with GitHub');
     expect(words).toContain('Email me a code');
     expect(out).toContain('href="/example/relay"');
-    expect(words).toContain('Explore the example');
+    expect(words).toContain('Take a tour');
+    expect(words).not.toMatch(/example/i);
     expect(words).not.toMatch(/setup prompt|setup\.md|auth\.md|llms\.txt/i);
     expect(out).not.toContain('gate__card');
   });

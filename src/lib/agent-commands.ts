@@ -5,9 +5,9 @@ import { workspaceScopeNow } from './api';
  * them carries a credential; the agent asks for an owner-approved connection itself.
  */
 
-/** The prompt a person pastes into their coding agent. The agent reads the guide and asks them to approve access. */
+/** The prompt a person pastes into their coding agent. The agent reads the guide and connects as the person on its own. */
 export function setupPrompt(): string {
-  return `Set up Braid for this repository. Read ${window.location.origin}/setup.md and follow its instructions.`;
+  return `Set up Braid for this repository by following ${window.location.origin}/setup.md. Sign me in with the GitHub CLI if gh is signed in; otherwise ask me for my email address, then for the code Braid emails me.`;
 }
 
 /** Connects the CLI to this deployment, and to one repository when given; the owner approves the connection in Braid. */
@@ -25,7 +25,7 @@ export function localAgentGuide(missionId?: string, agentId?: string): string {
   return url.toString();
 }
 
-/** Where an MCP client connects to this deployment, with its access token and workspace in headers. */
+/** Where an MCP client connects to this deployment. A client with OAuth needs nothing more; others send an agent token. */
 export function mcpEndpoint(): string {
   return `${window.location.origin}/mcp`;
 }

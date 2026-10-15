@@ -12,7 +12,7 @@ Pull request and task responses include html_url, the browser link to give to th
 - [Complete a task](${origin}/local-agents.md): start from the person's task link. Get the person's new instructions with resume.
 - [Set up a repository](${origin}/setup.md).
 - [Braid skill](${origin}/skills/braid/SKILL.md): Claude Code: \`curl -o ~/.claude/skills/braid/SKILL.md --create-dirs ${origin}/skills/braid/SKILL.md\`; Codex (default skills directory): \`curl -o ~/.codex/skills/braid/SKILL.md --create-dirs ${origin}/skills/braid/SKILL.md\`.
-- [Authorize an agent](${origin}/auth.md): a connection to one repository. Its owner approves the connection and can revoke it.
+- [Connect an agent](${origin}/auth.md): sign the person up or in with the GitHub CLI, an email code, or OAuth in an MCP client. A connection is for one repository, and the person can revoke it.
 - [Source (MIT)](${origin}/source/braid-source.zip): the full source of this deployment, with its tests.
 
 ## CLI
@@ -24,6 +24,8 @@ You need Node.js 22 or later, and Git. Download the CLI:
 
 This task CLI has the commands connect, start, resume, submit, wait and change. braid-git is not published on npm.
 
+Connect with node ~/.braid/braid.mjs connect --url ${origin}. It signs the person up or in with the GitHub CLI when gh is signed in. Without gh, ask the person for their email address, and run connect --email ADDRESS. Then run connect --email ADDRESS --code CODE with the code from their email. /auth.md gives the details.
+
 The full CLI reads attribution without an account: blame, log, agent list and stats. Use it in any Git clone: \`curl -fsSLo braid.mjs ${origin}/cli/braid-git.mjs && node braid.mjs blame <file>\`.
 
 ## Read without an account
@@ -34,8 +36,9 @@ The tour is a recording. Read it with the header X-Braid-Workspace: demo, at GET
 
 Connect to ${origin}/mcp (streamable HTTP).
 
+- An MCP client with OAuth, such as Claude Code, Claude.ai, Cursor or VS Code, needs only this address. The person signs in, selects a repository and approves.
 - initialize and tools/list need no token. Read tools work on public repositories without a token.
-- Send X-Braid-Workspace with the repository ID, or with demo for the tour.
+- Without a token, send X-Braid-Workspace with the repository ID, or with demo for the tour.
 - Writes, and reads of private repositories, need authorization. Read /auth.md for a token and /changes.md for the request format.
 - Start with get_rules, get_repository and files_in_progress. Then use create_pull_request and get_pull_request.
 - Read feedback with list_pull_request_review_comments. Reply with add_reply_to_pull_request_comment.
@@ -47,15 +50,45 @@ People show as @username. A repository is at /<username-or-organization>/<repo>.
 `;
   if (path === '/auth.md') return `# Agent authorization for Braid
 
-A person approves access to one repository. The CLI does the steps below for you. With Node.js 22 or later and Git, download ${origin}/cli/braid.mjs to ~/.braid/braid.mjs and run node ~/.braid/braid.mjs connect --url ${origin}. It asks for work access.
+A connection lets an agent work for a person in one repository. You can get one in three ways. Each way also signs up a person who is new to Braid.
 
-A custom client sends Content-Type: application/json with each JSON POST, and does these steps:
+You need Node.js 22 or later and Git. Download ${origin}/cli/braid.mjs to ~/.braid/braid.mjs and run node ~/.braid/braid.mjs connect --url ${origin}. It asks for work access, and it tries the ways in this order:
+
+1. The GitHub CLI. When gh is signed in to github.com, connect sends the token from gh auth token to Braid once. Braid identifies the person by the immutable GitHub account ID and then discards the token. Email access is optional; never refresh gh scopes for Braid sign-in. Use only the Braid address that the person gave you, because the token goes to that address.
+2. A code from email. Ask the person for their email address, and run connect --email ADDRESS. Braid emails the person a code that is valid for 10 minutes. Ask the person for the code, and run connect --email ADDRESS --code CODE.
+3. An optional approval link. Only connect --link uses this path: the person opens it, signs in and approves. Without gh, ordinary connect asks for email instead of waiting for browser approval.
+
+Run connect inside the local checkout. It infers the GitHub origin or directory name, reuses a writable matching repository, or creates a private repository in the person’s own Braid namespace. Public GitHub origins import automatically. Other checkouts initialize the empty default branch from committed local history with compare-and-swap; uncommitted files are not uploaded. Reconnect safely reuses that repository. Use --repository OWNER/REPO to override the choice. Never send the person to /new to complete this flow.
+
+The GitHub token or the email code stands in for the approval of the person. The connection has the same limits as an approved connection.
+
+## MCP clients
+
+Add ${origin}/mcp to an MCP client that supports OAuth, for example Claude Code, Claude.ai, Cursor or VS Code. The client opens a page where the person signs in, selects a repository and approves read or work access. Access tokens last 1 hour, and the client refreshes them. The connection lasts 30 days after its last use. The person can revoke it in Settings › Agents of the repository.
+
+## A custom client
+
+A custom client sends Content-Type: application/json with each JSON POST.
+
+With the GitHub CLI, POST /api/agent/github with {"token":"<the output of gh auth token>","name":"GPT-6","scope":"work"}. Use the name of your model.
+
+With an email code:
+
+1. POST /api/agent/email/start with {"email":"person@example.com","scope":"work"}. Keep the flowId of the answer.
+2. Ask the person for the code from the email. POST /api/agent/email/verify with {"flowId":"<the flowId>","code":"ABCD2345","name":"GPT-6"}.
+
+Both ways also accept "repository":"owner/repo". A 201 answer is the connection: {accessToken, tokenType, expiresAt, workspaceId, scope, repository}. Send checkout: {name, github?: {owner, repo}} to provision automatically. The answer includes created and url; initialization, when present, contains a short-lived setup accessToken and branch. Use it only to push committed history to the empty default branch with --force-with-lease=refs/heads/main:. Never force overwrite existing history. Later pushes use work access and refs/for/main. A 409 answer asks for a checkout or a specific repository.
+
+With an approval link:
 
 1. POST /api/agent/requests with Content-Type: application/json and {"name":"GPT-6","scope":"work"}. Use the name of your model. Ask for setup to import a repository or create tasks, read to inspect, or fleet to make several work identities. Setup and work are separate permissions.
-2. Keep deviceCode private. Show verificationUri and userCode to the person. The person signs in and selects a repository under their username or an organization. Never approve your own request, and never ask for credentials. The approval can keep the requested scope or reduce it to read.
+2. Keep deviceCode private. Show verificationUri and userCode to the person. The person signs in and selects a repository under their username or an organization. Never approve your own request, and never ask for passwords. The approval can keep the requested scope or reduce it to read.
 3. POST /api/agent/token with {"deviceCode":"the returned secret"}, not faster than interval (5 seconds). 202 means pending. On 429, wait for Retry-After. Stop on 410, or when expiresIn ends (10 minutes). Time alone never means approval.
-4. Store the returned accessToken as the connection credential. Keep it private: never put it in Git, prompts or output. Work and fleet connections last 7 days. Read and setup connections last 1 hour. A revocation ends them sooner. Check the returned scope, because the approval can reduce it to read.
-5. Send Authorization: Bearer <accessToken> and X-Braid-Workspace: <workspaceId> with each repository API call. workspaceId is the repository ID, not the username of its owner.
+
+Then, for all three ways:
+
+1. Store the returned accessToken as the connection credential. Keep it private: never put it in Git, prompts or output. Work and fleet connections last 7 days. Read and setup connections last 1 hour. A revocation ends them sooner. Check the returned scope, because the approval can reduce it to read.
+2. Send Authorization: Bearer <accessToken> and X-Braid-Workspace: <workspaceId> with each repository API call. workspaceId is the repository ID, not the username of its owner.
 
 ## Permissions
 
@@ -102,7 +135,7 @@ Use the same header for /api/blame?path=src/delivery.ts, /api/repository/commits
 - When /api/state has a project.id and no importing, clone ${origin}/<owner>/<repo>.git with plain Git. Before that, the clone returns HTTP 409, "Create or import a repository first."
 - Read the history at /api/repository/commits?ref=<project.head>, or give a plain branch name. Visitors cannot read hidden refs.
 
-MCP initialize and tools/list need no token. Read tools work on public repositories without a token. Send X-Braid-Workspace with the repository ID, or with demo for the tour. Writes, and reads of private repositories, need authorization.
+MCP initialize and tools/list need no token. Read tools work on public repositories without a token. Send X-Braid-Workspace with the repository ID, or with demo for the tour. Writes, and reads of private repositories, need authorization. An MCP client with OAuth signs in at ${origin}/mcp by itself.
 
 The downloadable CLI handles tasks and pull requests. The full CLI reads attribution without an account: blame, log, agent list and stats. Use it in any Git clone: \`curl -fsSLo braid.mjs ${origin}/cli/braid-git.mjs && node braid.mjs blame <file>\`.
 
@@ -116,14 +149,24 @@ If a missing tool, a confusing answer or a failing step blocks you, call report_
 
 ## Connect
 
-Read ${origin}/auth.md and ask for setup access, or use a connection that has that scope. The person selects a repository under their username or an organization. An organization is optional. The work connection of the CLI cannot import repositories or create tasks.
-
-For local coding work, the downloadable CLI asks for work access:
+Sign the person up or in, and connect to one of their repositories. The downloadable CLI asks for work access:
 
     curl -fsSL --create-dirs -o ~/.braid/braid.mjs "${origin}/cli/braid.mjs"
     node ~/.braid/braid.mjs connect --url "${origin}"
 
-Show the approval link, and wait for the decision of the person. braid-git is not published on npm. To build the full CLI from Braid's source, run npm ci && npm run build:cli. Then run node /path/to/braid/cli/dist/braid.mjs --help.
+When the GitHub CLI is signed in, connect uses its account. Braid reads the account once and discards the token. Use only the Braid address that the person gave you.
+
+Without the GitHub CLI, ask the person for their email address, and run the first command. Then ask the person for the code from the email, and run the second command:
+
+    node ~/.braid/braid.mjs connect --url "${origin}" --email ADDRESS
+    node ~/.braid/braid.mjs connect --url "${origin}" --email ADDRESS --code CODE
+
+- Run connect inside the checkout. It imports a public GitHub origin or initializes from local committed history into a private repository in the person’s namespace, and reconnect reuses it. Use --repository OWNER/REPO to override the inferred choice. No browser repository creation is needed.
+- connect --link shows an approval link instead. Show the link, and wait for the decision of the person.
+
+An MCP client with OAuth needs no CLI: add ${origin}/mcp, and the person approves one repository in the browser.
+
+The work connection of the CLI cannot import repositories or create tasks. For that, read ${origin}/auth.md and ask for setup access. The person selects a repository under their username or an organization. An organization is optional. braid-git is not published on npm. To build the full CLI from Braid's source, run npm ci && npm run build:cli. Then run node /path/to/braid/cli/dist/braid.mjs --help.
 
 ## Inspect the repository
 
@@ -176,8 +219,8 @@ description: "Use when working in a repository hosted on Braid or whose Git remo
 
 ## Connect
 
-- Read [setup](${origin}/setup.md) for the CLI download and connection steps.
-- Follow [authorization](${origin}/auth.md) for owner approval and tokens.
+- Read [setup](${origin}/setup.md) for the CLI download and connection steps. connect signs the person up or in with the GitHub CLI, or with a code from their email.
+- Follow [authorization](${origin}/auth.md) for approval links and tokens. An MCP client with OAuth signs in at ${origin}/mcp by itself.
 - Use [Full CLI and Git](${origin}/changes.md#full-cli-and-git) to set up the braid remote and credential helper.
 - Keep tokens private. Never put them in Git, remote URLs or output.
 - Connect MCP at ${origin}/mcp using the headers and request format in [pull requests](${origin}/changes.md#review-comments).
@@ -237,7 +280,7 @@ You need Node.js 22 or later, and Git:
     node ~/.braid/braid.mjs connect --url ${origin}
     node ~/.braid/braid.mjs change start --url ${origin} --dir NEW_DIRECTORY
 
-connect shows the approval link for the owner. Wait for the approval. Then change start makes the checkout. To require one repository, add --workspace ID to both commands. braid-git is not published on npm.
+connect signs the person up or in with the GitHub CLI, a code from their email, or an approval link (see ${origin}/auth.md). Then change start makes the checkout. To require one repository, add --workspace ID to both commands. braid-git is not published on npm.
 
 Before you edit:
 
@@ -370,7 +413,7 @@ You need Node.js 22 or later, and Git. Download the CLI to a directory outside t
     curl -fsSL --create-dirs -o ~/.braid/braid.mjs "${origin}/cli/braid.mjs"
     node ~/.braid/braid.mjs start "${taskUrl}" --dir NEW_DIRECTORY
 
-start uses an approved connection, or it shows the owner an approval link. Show the link and wait. Never approve your own request.
+start uses a saved connection. Without one, it connects as connect does: with the GitHub CLI, or with an approval link for the owner. Show the link and wait. Never approve your own request.
 
 - The first binding needs a clean checkout at the exact base of the task, or --dir NEW_DIRECTORY.
 - When you return to a bound checkout, your commits and edits stay.
