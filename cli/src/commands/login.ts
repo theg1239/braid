@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { strictGit, strict } from '../git';
 import { execFileSync } from 'node:child_process';
+import { hostname } from 'node:os';
 import { buildCommand } from '@stricli/core';
 import * as v from 'valibot';
 import { answer, ApiError, Braid, retryAfter, send } from '../api';
@@ -10,9 +11,16 @@ import { findRepository } from '../repository';
 import { deviceRequest, emailStarted, errorBody, grant, repositoryChoice, selfGrant } from '../schemas';
 import { columns, colours } from '../terminal';
 import { startActivityUpload } from '../activity';
+import { detectRun } from '../identity';
+import { toolName } from '../../../shared/models';
 
 const url = { kind: 'parsed', parse: normalizeOrigin, brief: 'Braid address, such as https://braid.example', placeholder: 'url', optional: true } as const;
-const AGENT = 'Braid CLI';
+
+/** How the person tells this connection apart from their others: the coding tool and the machine it runs on. */
+function agentName(context: BraidContext) {
+  const { tool } = detectRun(context), host = hostname().replace(/\.local$/, '').slice(0, 30);
+  return `${tool ? toolName(tool) : 'Coding agent'}${host ? ` on ${host}` : ''}`.slice(0, 60);
+}
 
 const day = (at: string) => new Date(at).toISOString().slice(0, 10);
 
@@ -26,7 +34,7 @@ function keep(context: BraidContext, origin: string, approved: v.InferOutput<typ
 }
 
 async function deviceLogin(context: BraidContext, origin: string, wanted?: string) {
-  const started = await send(context, `${origin}/api/agent/requests`, { method: 'POST', body: { name: AGENT, scope: 'work' } });
+  const started = await send(context, `${origin}/api/agent/requests`, { method: 'POST', body: { name: agentName(context), scope: 'work' } });
   const request = await answer(started, deviceRequest, { path: '/api/agent/requests' });
   const page = new URL(request.verificationUri);
   if (page.origin !== origin || page.username || page.password || page.href.includes(request.deviceCode) || request.interval > request.expiresIn) fail('Braid returned sign-in details braid will not use.');
@@ -93,7 +101,7 @@ export async function agentLogin(context: BraidContext, origin: string, wanted: 
   if (!link) {
     const token = githubCliToken(context.env);
     if (token) {
-      const response = await send(context, `${origin}/api/agent/github`, { method: 'POST', body: { token, name: AGENT, scope: 'work', ...naming(wanted) } });
+      const response = await send(context, `${origin}/api/agent/github`, { method: 'POST', body: { token, name: agentName(context), scope: 'work', ...naming(wanted) } });
       if (response.status === 201 || response.status === 409) return selfLogin(context, origin, response, '/api/agent/github', wanted);
       const reason = v.safeParse(errorBody, await response.json().catch(() => undefined));
       fail(`Braid did not connect with GitHub: ${reason.success ? reason.output.error : `HTTP ${response.status}`}`);
@@ -112,7 +120,7 @@ async function emailLogin(context: BraidContext, origin: string, email: string, 
   }
   const flow = readEmailFlow(context.env, origin, email) ?? fail('No code is waiting for this address. Run braid login --email ADDRESS first.');
   if (Date.parse(flow.expiresAt) <= context.now()) fail('The code for this address expired. Run braid login --email ADDRESS for a new one.');
-  const response = await send(context, `${origin}/api/agent/email/verify`, { method: 'POST', body: { flowId: flow.flowId, code, name: AGENT, ...naming(wanted) } });
+  const response = await send(context, `${origin}/api/agent/email/verify`, { method: 'POST', body: { flowId: flow.flowId, code, name: agentName(context), ...naming(wanted) } });
   if (response.status === 401) fail('That code is invalid or expired. Check it with the person, or run braid login --email ADDRESS for a new one.');
   const approved = await selfLogin(context, origin, response, '/api/agent/email/verify', wanted);
   removeEmailFlow(context.env, origin, email);

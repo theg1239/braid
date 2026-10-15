@@ -208,9 +208,9 @@ describe('owner-approved device connection', () => {
       .mockResolvedValueOnce(Response.json({ status: 'pending' }, { status: 202, headers: { 'retry-after': '7' } }))
       .mockResolvedValueOnce(Response.json({ status: 'slow_down' }, { status: 429, headers: { 'retry-after': '15' } }))
       .mockResolvedValueOnce(Response.json(grant()));
-    await cli.connect(origin, { env: settings, fetch, log, now: () => now, sleep: async (ms: number) => { waits.push(ms); now += ms; } }, undefined, { link: true });
+    await cli.connect(origin, { env: settings, agentName: () => 'Codex on laptop', fetch, log, now: () => now, sleep: async (ms: number) => { waits.push(ms); now += ms; } }, undefined, { link: true });
     expect(waits).toEqual([2000, 7000, 15000]);
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ name: 'Local coding agent', scope: 'work' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ name: 'Codex on laptop', scope: 'work' });
     expect(fetch.mock.calls.map(call => call[0])).toEqual([`${origin}/api/agent/requests`, ...Array(3).fill(`${origin}/api/agent/token`)]);
     expect(fetch.mock.calls.every(call => call[1].redirect === 'error')).toBe(true);
     const output = log.mock.calls.flat().join('\n');

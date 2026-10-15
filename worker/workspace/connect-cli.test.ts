@@ -22,7 +22,7 @@ const device = () => Response.json({ deviceCode: 'private-device-code-0123456789
 function runtime(fetch: ReturnType<typeof vi.fn>, token: string | null = githubToken) {
   const log = vi.fn(), githubTokenRead = vi.fn(() => token);
   let now = Date.now();
-  return { log, githubTokenRead, options: { cwd: root, env: { BRAID_CONFIG_HOME: join(root, 'config') }, fetch, log, githubToken: githubTokenRead, now: () => now, sleep: async (ms: number) => { now += ms; } } };
+  return { log, githubTokenRead, options: { cwd: root, env: { BRAID_CONFIG_HOME: join(root, 'config') }, agentName: () => 'Codex on laptop', fetch, log, githubToken: githubTokenRead, now: () => now, sleep: async (ms: number) => { now += ms; } } };
 }
 const sent = (fetch: ReturnType<typeof vi.fn>) => fetch.mock.calls.map(([url, init]) => ({ url: String(url), body: init?.body ? JSON.parse(init.body) : undefined }));
 
@@ -31,7 +31,7 @@ describe('connect with the GitHub CLI', () => {
     const fetch = vi.fn().mockResolvedValueOnce(granted());
     const rt = runtime(fetch);
     await expect(cli.connect(origin, rt.options)).resolves.toEqual({ workspaceId: 'workspace-one' });
-    expect(sent(fetch)).toEqual([{ url: `${origin}/api/agent/github`, body: { token: githubToken, scope: 'work', name: 'Local coding agent' } }]);
+    expect(sent(fetch)).toEqual([{ url: `${origin}/api/agent/github`, body: { token: githubToken, scope: 'work', name: 'Codex on laptop' } }]);
     expect(fetch.mock.calls[0][1].redirect).toBe('error');
     const output = rt.log.mock.calls.flat().join('\n');
     expect(output).toBe(`Connected to ${origin}/octo/web.`);
@@ -105,7 +105,7 @@ describe('connect with an emailed code', () => {
     await expect(cli.main(['connect', '--url', origin, '--email', 'maya@example.test', '--code', 'ABCD2345'], rt.options)).rejects.toThrow('Run connect inside the checkout');
     fetch.mockResolvedValueOnce(granted());
     await cli.main(['connect', '--url', origin, '--email', 'maya@example.test', '--code', 'ABCD-2345'], rt.options);
-    expect(sent(fetch).at(-1)).toEqual({ url: `${origin}/api/agent/email/verify`, body: { flowId, code: 'ABCD-2345', name: 'Local coding agent' } });
+    expect(sent(fetch).at(-1)).toEqual({ url: `${origin}/api/agent/email/verify`, body: { flowId, code: 'ABCD-2345', name: 'Codex on laptop' } });
     expect(cli.loadCredentials(origin, rt.options.env).accessToken).toBe(connection);
     expect(readdirSync(join(root, 'config', folder))).not.toContain(file);
     await expect(cli.main(['connect', '--url', origin, '--email', 'maya@example.test', '--code', 'ABCD2345'], rt.options)).rejects.toThrow('No code is waiting for this address.');
@@ -145,7 +145,7 @@ describe('connect against Braid itself', () => {
       expect(rt.log.mock.calls.flat().at(-1)).toBe(`Connected to ${origin}/maya-chen/relay.`);
       const saved = cli.loadCredentials(origin, rt.options.env);
       const session = await api.fetch(new Request(`${origin}/api/agent/session`, { method: 'POST', headers: { authorization: `Bearer ${saved.accessToken}`, 'content-type': 'application/json' }, body: '{}' }), env);
-      expect(await session.json()).toMatchObject({ workspaceId: repository.id, agent: { name: 'Local coding agent' } });
+      expect(await session.json()).toMatchObject({ workspaceId: repository.id, agent: { name: 'Codex on laptop' } });
     } finally { people.db.close(); secrets.db.close(); }
   });
 });

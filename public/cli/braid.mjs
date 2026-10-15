@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { constants, chmodSync, closeSync, existsSync, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readlinkSync, readSync, realpathSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
-import { execFileSync, spawn } from 'node:child_process';
-import { constants as system, homedir, tmpdir } from 'node:os';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { constants as system, homedir, hostname, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -253,7 +253,7 @@ export function loadCredentials(origin, env = process.env, { readOnly = false, w
   return { accessToken: tokenValue(record.accessToken), workspaceId: record.workspaceId };
 }
 
-const runtime = options => ({ env: process.env, fetch: globalThis.fetch, sleep, now: Date.now, log: console.log, git: runGit, signals: process, githubToken: githubCliToken, ...options });
+const runtime = options => ({ env: process.env, agentName: () => agentName(), fetch: globalThis.fetch, sleep, now: Date.now, log: console.log, git: runGit, signals: process, githubToken: githubCliToken, ...options });
 
 /** The GitHub CLI's token for github.com, or null when gh is missing or signed out. It goes once to Braid and is never saved. */
 export function githubCliToken(env = process.env) {
@@ -282,7 +282,37 @@ export function retryDelay(value, interval, now = Date.now()) {
   return Math.max(interval, Number.isFinite(seconds) ? seconds : 0);
 }
 
-const AGENT_NAME = 'Local coding agent';
+/** Coding tools by the executable or package they run as, as the person knows them. */
+const TOOLS = [
+  ['Claude Code', /^claude$/, /@anthropic-ai\/claude-code\b/], ['Codex', /^codex(?:-[\w-]+)?$/, /@openai\/codex\b/],
+  ['Cursor', /^cursor-agent$/, /\/cursor-agent\//], ['Gemini CLI', /^gemini$/, /@google\/gemini-cli\b/],
+  ['opencode', /^opencode$/, /\bopencode-ai\b/], ['GitHub Copilot', /^copilot$/, /@github\/copilot\b/],
+];
+
+/** The coding tool that started this process: what it declares in the environment, else the nearest one among its ancestors. */
+export function codingTool(env = process.env, start = process.ppid) {
+  if (env.CLAUDECODE === '1') return 'Claude Code';
+  if (!start || process.platform === 'win32') return undefined;
+  const table = spawnSync('ps', ['-A', '-o', 'pid=,ppid=,args='], { encoding: 'utf8', timeout: 2000 });
+  if (table.status !== 0) return undefined;
+  const processes = new Map(table.stdout.split('\n').map(line => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line)).filter(Boolean).map(([, pid, parent, args]) => [Number(pid), { parent: Number(parent), args: args.split(/\s+/) }]));
+  for (let pid = start, steps = 0; pid > 1 && steps < 16; steps++) {
+    const entry = processes.get(pid);
+    if (!entry) return undefined;
+    for (const word of entry.args.slice(0, 2)) {
+      const known = TOOLS.find(([, name, path]) => name.test(basename(word).replace(/\.(?:c?js|mjs|exe|cmd)$/, '')) || path.test(word));
+      if (known) return known[0];
+    }
+    pid = entry.parent;
+  }
+  return undefined;
+}
+
+/** How the person tells this connection apart from their others: the tool and the machine it runs on. */
+export function agentName(env = process.env, machine = hostname()) {
+  const host = machine.replace(/\.local$/, '').slice(0, 30);
+  return `${codingTool(env) || 'Coding agent'}${host ? ` on ${host}` : ''}`.slice(0, 60);
+}
 /** Where a code Braid emailed waits for the agent to be given it: beside the origin's credentials, never matched as one. */
 const emailFlowFile = (origin, email, env) => join(dirname(credentialFile(origin, env)), sha256(normalizeOrigin(origin)), `email-${sha256(email.trim().toLowerCase())}.json`);
 
@@ -309,7 +339,7 @@ export async function connect(origin, options = {}, workspace, { email, code, re
   if (repository !== undefined && (typeof repository !== 'string' || repository.length > 141 || !/^[^/\s]+\/[^/\s]+$/.test(repository))) fail('Name the repository as OWNER/REPO.');
   const rt = runtime(options);
   const checkout = !workspace ? checkoutTarget(options) : undefined;
-  const target = { name: AGENT_NAME, ...(checkout ? { checkout } : {}), ...(repository ? { repository } : {}), ...(workspace ? { workspaceId: workspace } : {}) };
+  const target = { name: rt.agentName(), ...(checkout ? { checkout } : {}), ...(repository ? { repository } : {}), ...(workspace ? { workspaceId: workspace } : {}) };
   if (email !== undefined) return code === undefined ? sendEmailCode(rt, origin, email) : emailConnect(rt, origin, email, code, target, workspace);
   if (!link) {
     const token = rt.githubToken(rt.env);
@@ -385,7 +415,7 @@ async function emailConnect(rt, origin, email, code, target, workspace) {
 
 /** The owner chooses the repository while approving the link. A required workspace is checked after approval. */
 async function linkConnect(rt, origin, workspace) {
-  const response = await post(rt, `${origin}/api/agent/requests`, JSON.stringify({ name: AGENT_NAME, scope: 'work' }));
+  const response = await post(rt, `${origin}/api/agent/requests`, JSON.stringify({ name: rt.agentName(), scope: 'work' }));
   if (!response.ok) fail(`Authorization request failed (HTTP ${response.status}). ${response.status === 404 || response.status === 503 ? 'Ask the owner to check public accounts, the HTTPS application origin and the session secret. ' : ''}See ${origin}/auth.md before retrying.`);
   const request = await jsonResponse(response);
   let verification;

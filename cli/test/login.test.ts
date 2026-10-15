@@ -33,7 +33,7 @@ describe('braid login', () => {
     expect(result.stdout).toContain('Signed in to https://braid.example for repository ws_1 until 2026-10-15.');
     expect(result.stdout + result.stderr).not.toContain(CONNECTION);
     expect(result.stdout + result.stderr).not.toContain('d'.repeat(72));
-    expect(braidServer.sent[0]).toMatchObject({ method: 'POST', path: '/api/agent/requests', body: { name: 'Braid CLI', scope: 'work' } });
+    expect(braidServer.sent[0]).toMatchObject({ method: 'POST', path: '/api/agent/requests', body: { name: expect.stringMatching(/^Coding agent/), scope: 'work' } });
     expect(braidServer.sent.slice(1).map(sent => sent.body)).toEqual(Array(4).fill({ deviceCode: 'd'.repeat(72) }));
     // Five seconds, then the eight the pending answer asks for, then a slow-down adds five to the interval: ten, and ten again.
     expect(time.waits).toEqual([5000, 8000, 10_000, 10_000]);
@@ -93,7 +93,7 @@ describe('braid login for a person new to Braid', () => {
     const result = await braid(['login', '--url', origin], { cwd: home, env, fetch: braidServer.fetch, ...time });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe(`Connected to ${origin}/octo/web.\nSigned in to ${origin} for repository ws_1 until 2026-10-15.\n`);
-    expect(braidServer.sent).toEqual([expect.objectContaining({ path: '/api/agent/github', body: { token: GITHUB, name: 'Braid CLI', scope: 'work' } })]);
+    expect(braidServer.sent).toEqual([expect.objectContaining({ path: '/api/agent/github', body: { token: GITHUB, name: expect.stringMatching(/^Coding agent/), scope: 'work' } })]);
     expect(result.stdout + result.stderr).not.toContain(GITHUB);
     expect(result.stdout + result.stderr).not.toContain(CONNECTION);
     const saved = readFileSync(join(env.BRAID_CONFIG_HOME, sha256(origin), `${sha256('ws_1')}.json`), 'utf8');
@@ -143,7 +143,7 @@ describe('braid login for a person new to Braid', () => {
     expect(wrong.stderr).toContain('That code is invalid or expired.');
     const right = await braid(['login', '--url', origin, '--email', 'Maya@Example.test', '--code', 'ABCD-2345'], { cwd: home, env, fetch: braidServer.fetch, ...clock() });
     expect(right.exitCode).toBe(0);
-    expect(braidServer.sent.at(-1)).toMatchObject({ path: '/api/agent/email/verify', body: { flowId, code: 'ABCD-2345', name: 'Braid CLI' } });
+    expect(braidServer.sent.at(-1)).toMatchObject({ path: '/api/agent/email/verify', body: { flowId, code: 'ABCD-2345', name: expect.stringMatching(/^Coding agent/) } });
     expect(existsSync(file)).toBe(false);
     expect((await braid(['login', '--url', origin, '--code', 'ABCD2345'], { cwd: home, env, ...clock() })).stderr).toContain('--code goes with the --email');
   });

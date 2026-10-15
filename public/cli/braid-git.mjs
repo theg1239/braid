@@ -4,7 +4,7 @@ import { accessSync, chmodSync, closeSync, constants, existsSync, fchmodSync, fs
 import { basename, delimiter, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { setTimeout as setTimeout$1 } from "node:timers/promises";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { availableParallelism, constants as constants$1, homedir, tmpdir } from "node:os";
+import { availableParallelism, constants as constants$1, homedir, hostname, tmpdir } from "node:os";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 //#region ../node_modules/@stricli/core/dist/index.js
 var ExitCode = {
@@ -6401,7 +6401,11 @@ const url = {
 	placeholder: "url",
 	optional: true
 };
-const AGENT = "Braid CLI";
+/** How the person tells this connection apart from their others: the coding tool and the machine it runs on. */
+function agentName(context) {
+	const { tool } = detectRun(context), host = hostname().replace(/\.local$/, "").slice(0, 30);
+	return `${tool ? toolName(tool) : "Coding agent"}${host ? ` on ${host}` : ""}`.slice(0, 60);
+}
 const day = (at) => new Date(at).toISOString().slice(0, 10);
 /** Saves an approval with owner-only permissions where braid.mjs keeps its own. Work access is required. */
 function keep(context, origin, approved, wanted) {
@@ -6420,7 +6424,7 @@ async function deviceLogin(context, origin, wanted) {
 	const request = await answer(await send(context, `${origin}/api/agent/requests`, {
 		method: "POST",
 		body: {
-			name: AGENT,
+			name: agentName(context),
 			scope: "work"
 		}
 	}), deviceRequest, { path: "/api/agent/requests" });
@@ -6537,7 +6541,7 @@ async function agentLogin(context, origin, wanted = {}, link = false) {
 				method: "POST",
 				body: {
 					token,
-					name: AGENT,
+					name: agentName(context),
 					scope: "work",
 					...naming(wanted)
 				}
@@ -6576,7 +6580,7 @@ async function emailLogin(context, origin, email, code, wanted) {
 		body: {
 			flowId: flow.flowId,
 			code,
-			name: AGENT,
+			name: agentName(context),
 			...naming(wanted)
 		}
 	});
