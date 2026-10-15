@@ -395,7 +395,8 @@ async function discover() {
   do {
     const page = await read(directoryGroup, `page ${cursors.size + 1}`, query('/api/repos', { limit: '100', cursor }), undefined, value => {
       need(Array.isArray(value?.items) && (value.nextCursor === null || text(value.nextCursor)), 'invalid repository directory');
-      need(value.items.every(item => /^[a-z0-9-]+$/.test(item.owner?.slug) && /^[a-z0-9-]+$/.test(item.repo?.slug)), 'invalid repository address');
+      // Mirrors keep GitHub's names: owners of letters, digits and hyphens; repositories also with dots and underscores.
+      need(value.items.every(item => /^[A-Za-z0-9-]+$/.test(item.owner?.slug) && /^[A-Za-z0-9._-]+$/.test(item.repo?.slug)), 'invalid repository address');
       need(!value.nextCursor || !cursors.has(value.nextCursor), 'repository directory repeats its cursor');
     });
     if (!page) break;
@@ -604,7 +605,9 @@ try {
   if (mirrorsOnly) for (const g of [httpGroup, ogGroup, tourGroup, directoryGroup]) { g.skipped = '--mirrors-only'; complete(g); }
   const mirrorWork = mirrorsEnabled ? mirrorChecks() : Promise.resolve();
   const work = [...(mirrorsOnly ? [] : [httpChecks(), ogChecks(), tourChecks()]), (async () => {
-    const repos = mirrorsOnly ? [] : await discover();
+    // Explore is read in full; the deep checks take the most recently updated repositories, since hundreds of mirrors
+    // would pass the anonymous read limits that the canary itself must respect.
+    const repos = (mirrorsOnly ? [] : await discover()).slice(0, Number(process.env.CANARY_REPOSITORIES ?? 6));
     await pool(repos, 3, repositoryChecks);
     await browserChecks(repos, await mirrorWork);
   })()];

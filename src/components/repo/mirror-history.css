@@ -1,7 +1,6 @@
-.mirror-history { min-height: 360px; }
-.mirror-history__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-.mirror-history__head h1 { font-size: 14px; font-weight: 500; }
-.mirror-history__head p { margin-top: 2px; font-size: 12px; color: var(--fg-3); }
+/* As tall as the small button that appears when the copy is done, so the header never grows. */
+.mirror-history__scope { flex: 1; color: var(--fg-3); font-size: 12px; line-height: 26px; }
+.mirror-history__scope .mono { font-size: 11px; }
 .mirror-history__table { table-layout: fixed; }
 .mirror-history__table.fleet__table th:first-child, .mirror-history__table.fleet__table td:first-child { width: 40%; }
 .mirror-history__table.fleet__table th:nth-child(2) { width: 90px; }
@@ -9,13 +8,12 @@
 .mirror-history__table tbody th { border-bottom: 0; padding-block: 12px; font-size: 13px; font-weight: 400; white-space: normal; }
 .mirror-history__table tbody tr + tr th { border-top: 1px solid var(--line); }
 .mirror-history__table .fleet__tool { display: block; margin-top: 3px; }
+.mirror-history__table .skeleton-line { display: block; }
 .mirror-history__commit { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; color: var(--fg-2); }
 .mirror-history__commit > :first-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mirror-history__commit .mono { font-size: 11px; color: var(--fg-3); }
 .mirror-history__commit:hover { text-decoration: underline; text-underline-offset: 3px; }
-.mirror-history__empty { padding: 24px 16px; color: var(--fg-3); font-size: 13px; }
 @media (max-width: 640px) {
-  .mirror-history__head { padding-inline: 12px; }
   .mirror-history__table.fleet__table th:first-child, .mirror-history__table.fleet__table td:first-child { width: auto; }
   .mirror-history__table.fleet__table th:nth-child(2) { width: 72px; }
   .mirror-history__table.fleet__table th:last-child { width: 108px; }

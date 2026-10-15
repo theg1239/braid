@@ -1,4 +1,4 @@
-import type { CommitPage, RepositoryCommit } from '../../../shared/history';
+import type { RepositoryCommit } from '../../../shared/history';
 import { modelName, toolBase, toolName } from '../../../shared/models';
 import { useMirror } from '../../account/mirrors';
 import { api } from '../../lib/api';
@@ -10,16 +10,17 @@ const MIRROR_HISTORY_LIMIT = 100;
 
 // A completed import may have more ancestry at the same tip than the shallow preview.
 export const mirrorHistory = reader(
-  (head: string, importing: boolean, cursor: string | null = null) => JSON.stringify([head, importing, cursor]),
-  (head: string, _importing: boolean, cursor: string | null = null) => api.commits(head, '', cursor, MIRROR_HISTORY_LIMIT),
+  (head: string, importing: boolean) => JSON.stringify([head, importing]),
+  (head: string) => api.commits(head, '', null, MIRROR_HISTORY_LIMIT),
 );
 
+/** The newest commits at the mirror's tip, for the commit row on Code. */
 export function useMirrorHistory() {
   const snapshot = useSnapshot();
   const mirror = useMirror();
   const head = snapshot.project.head;
   const importing = !!snapshot.importing || !!mirror?.importing;
-  const history = useRead(mirrorHistory, head ? [head, importing, null] : null);
+  const history = useRead(mirrorHistory, head ? [head, importing] : null);
   return { ...history, head, importing };
 }
 
@@ -53,9 +54,4 @@ export function aggregateHistory(commits: RepositoryCommit[], limit = MIRROR_HIS
   }
   const rows = [...agents.values()].sort((a, b) => b.commits - a.commits || a.name.localeCompare(b.name));
   return { total: items.length, agentCommits: rows.filter(row => row.kind === 'agent').reduce((sum, row) => sum + row.commits, 0), agents: rows, people };
-}
-
-/** Short histories are complete only after import finishes and the server reports no further page. */
-export function completeHistory(page: CommitPage | undefined, importing: boolean, limit = MIRROR_HISTORY_LIMIT): boolean {
-  return !!page && (page.items.length >= limit || !importing && page.nextCursor === null);
 }

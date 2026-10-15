@@ -36,7 +36,7 @@ import { repositoryUrlError } from '../../shared/repository-url';
 import { githubImportSource, githubReadEndpoint, githubRepositoryForImport, previewDirectory, previewFile, type ImportPreview } from '../github/routes';
 import { mirrorEndpoint, refreshedMirrorSource, mirrorTransfer, mirrorImportSource, mirrorTooLarge, MIRROR_LARGE, MIRROR_LARGE_CODE, MIRROR_SYNC_MS, type MirrorRecord } from '../github/mirrors';
 import type { HistoryCopy } from '../repositories/branches';
-import { GitError } from '../git/transport';
+import { GitError, type GitEndpoint } from '../git/transport';
 import type { GitHubRepositorySelection } from '../../shared/github';
 import { demoEntries, directoryCommits, directoryEntries, fileAt, ObjectMemory, readingNames, recordedDirectoryCommits, repositoryEntry, repositoryPath, treePage } from '../repositories/repository';
 import type { ComposeReader } from '../repositories/compose';
@@ -62,7 +62,12 @@ type StagedMerge = { files: Record<string, GitFileEdit>; fingerprint: string; pr
 type MirrorJob = { workspaceId: string; fullName: string; userId?: string };
 /** An import on its way. `replaces` names a full mirror copy that keeps serving until this one lands, then goes. */
 type PendingProject = { name: string; displayName: string; description: string; sourceUrl?: string; github?: GitHubRepositorySelection; sourcePublic?: boolean; remote?: string; branch?: string; attempted?: boolean; mirror?: MirrorJob;
-  authorization?: Authorization; initialToken?: string; startedAt?: string; error?: string; replaces?: string };
+  authorization?: Authorization; initialToken?: string; startedAt?: string; error?: string; replaces?: string;
+  /**
+   * A mirror snapshot copied in parts (github/mirror-parts.ts) into its own repository, the failed import it took over
+   * (whose name Artifacts still holds), and when its last part was stored.
+   */
+  parts?: true; partsOf?: string; progressAt?: string };
 /** How long an import may keep its request waiting before Braid answers and follows the copy in the background. */
 const IMPORT_ANSWER_MS = 1_500;
 /** Whether a promise settles, either way, within `ms`. */
@@ -123,6 +128,7 @@ export class Workspace extends DurableObject<BraidEnv> {
   private mirrorStopped = false;
   private mirrorPauseUntil = 0;
   private copyingBranches = false;
+  private copyingParts = false;
   private importRead?: Promise<void>;
   private saved = new Map<string, string>();
   private journal!: RequestJournal;
@@ -911,6 +917,33 @@ export class Workspace extends DurableObject<BraidEnv> {
     await mirrorEndpoint(this.env, mirror, job.userId);
     return mirror;
   }
+  /**
+   * The operator's seeding asks for a failed copy again. Only an import that ended with its error starts over; one
+   * still running, a copy in parts included, is left to finish. A failed replacement is dropped instead.
+   */
+  async retryMirror(mirror: MirrorRecord, userId?: string): Promise<void> {
+    if (this.creating || this.copyingParts) return;
+    const pending = await this.ctx.storage.get<PendingProject>('pending-project');
+    const directory = directoryOf(this.env);
+    // Cleanup may finish before the Directory's error is cleared. Recover only a confirmed serving copy.
+    if (!pending && mirror.syncedAt && this.data?.project.id) {
+      using repo = await artifactsOf(this.env).get(this.data.project.id);
+      await repo.info();
+      await directory.mirrorUpdated(mirror.workspaceId, { importing: false, error: null });
+      return;
+    }
+    if (!pending?.error || !pending.mirror) return;
+    // A failed replacement left behind goes, so the full copy serves and syncs again; a later sync replaces it.
+    if (pending.replaces) {
+      await this.abandonReplacement(pending);
+      await directory.mirrorUpdated(mirror.workspaceId, { error: null });
+      return;
+    }
+    // A first copy tried again starts with the whole transfer budget, as a replacement copy does.
+    await directory.mirrorReplacing(mirror.workspaceId);
+    await directory.mirrorUpdated(mirror.workspaceId, { importing: true, error: null });
+    await this.readMirror({ ...mirror, importing: 1, error: null }, userId);
+  }
   /** Coalesce maintenance in memory; repeated importing reads merely observe the durable reservation. */
   async readMirror(mirror: MirrorRecord, userId?: string): Promise<void> {
     if (this.mirrorStopped && this.mirrorPauseUntil <= Date.now()) await this.resumeMirror();
@@ -930,7 +963,14 @@ export class Workspace extends DurableObject<BraidEnv> {
       await this.ctx.storage.put('repository-key', this.repositoryKey);
     }
     if (!this.data.project.id) {
-      if (!await this.ctx.storage.get<PendingProject>('pending-project')) await this.importMirror(mirror, job, userId);
+      const pending = await this.ctx.storage.get<PendingProject>('pending-project');
+      // The Directory cleared the error of a failed first copy to try again: the copy starts over under a new name,
+      // since Artifacts holds a deleted name for a while, and the failed repository goes.
+      if (pending?.error && pending.mirror) {
+        await this.ctx.storage.delete('pending-project');
+        this.ctx.waitUntil(artifactsOf(this.env).delete(pending.name).catch(error => { if (!artifactsFailed(error, 'NOT_FOUND')) logFailure('mirror_retry_cleanup_failed', error, { repository: pending.name }); }));
+        await this.importMirror(mirror, job, userId, undefined, true);
+      } else if (!pending) await this.importMirror(mirror, job, userId);
       return;
     }
     // A copy in progress owns the repository; a visit only makes sure its next run is scheduled.
@@ -978,13 +1018,14 @@ export class Workspace extends DurableObject<BraidEnv> {
   }
   /**
    * A mirror's copy starts as a depth-one import, completed by the same durable path as an owner-authorized import.
-   * One that `replaces` a full copy is imported beside it under a new name: Artifacts holds a deleted name for a while.
+   * One that `replaces` a full copy, or `retry`s a failed one, is imported under a new name: Artifacts holds a deleted
+   * name for a while.
    */
-  private async importMirror(mirror: MirrorRecord, job: MirrorJob, userId?: string, replaces?: string) {
+  private async importMirror(mirror: MirrorRecord, job: MirrorJob, userId?: string, replaces?: string, retry = false) {
     // Admission just checked this source; reuse its short lease while issuing the bridge grant.
     const [source, importUrl] = await Promise.all([refreshedMirrorSource(this.env, mirror, userId, false), mirrorImportSource(this.env, mirror, userId)]);
     const name = `mirror-${mirror.workspaceId.replaceAll('-', '')}`;
-    const pending: PendingProject = { name: replaces ? `${name}-${Date.now().toString(36)}` : name, displayName: mirror.fullName.split('/')[1], description: '',
+    const pending: PendingProject = { name: replaces || retry ? `${name}-${Date.now().toString(36)}` : name, displayName: mirror.fullName.split('/')[1], description: '',
       sourceUrl: `https://github.com/${mirror.fullName}.git`, sourcePublic: !mirror.private, branch: source.branch, startedAt: now(), attempted: true,
       mirror: job, ...(replaces ? { replaces } : {}) };
     await this.ctx.storage.put('pending-project', pending);
@@ -993,8 +1034,90 @@ export class Workspace extends DurableObject<BraidEnv> {
       this.data.files = {};
       await this.save(undefined, 200, undefined, false);
     }
-    this.ctx.waitUntil(this.followImport(pending.name, artifactsOf(this.env).import({ source: { url: importUrl, branch: source.branch, depth: 1 }, target: { name: pending.name } })));
+    const started = artifactsOf(this.env).import({ source: { url: importUrl, branch: source.branch, depth: 1 }, target: { name: pending.name } })
+      // A snapshot larger than one import carries arrives in parts: the bridge marked the mirror when it stopped the
+      // transfer at Artifacts' import limit, or Artifacts ran out of memory. Every other refusal ends the import.
+      .catch(async (error: unknown) => {
+        const directory = directoryOf(this.env);
+        if (!artifactsFailed(error, 'MEMORY_LIMIT') && (await directory.mirrorRecord(job.workspaceId))?.error !== MIRROR_LARGE) throw error;
+        await directory.mirrorUpdated(job.workspaceId, { importing: true, error: null });
+        return this.importInParts(pending.name, job, source.branch);
+      });
+    this.ctx.waitUntil(this.followImport(pending.name, started));
     await this.scheduleAlarm(Date.now() + 2_000);
+  }
+  /**
+   * Creates the mirror's repository and copies its snapshot in parts. The failed import still holds its own name, so
+   * the copy takes `<name>-parts`, and the reservation follows it; a repository left by a stopped copy is reused.
+   */
+  private async importInParts(failed: string, job: MirrorJob, branch: string): Promise<ArtifactsCreateRepoResult> {
+    if (this.copyingParts) throw new HttpError(409, 'This mirror is already copying.');
+    // Held from before the reservation names the copy, so the alarm never resumes a copy that is starting.
+    this.copyingParts = true;
+    try {
+      const artifacts = artifactsOf(this.env), name = `${failed}-parts`;
+      const pending = await this.ctx.storage.get<PendingProject>('pending-project');
+      if (pending?.name !== failed) throw new HttpError(409, 'This import ended.');
+      await this.ctx.storage.put('pending-project', { ...pending, name, partsOf: failed, parts: true, progressAt: now() });
+      this.ctx.waitUntil(artifacts.delete(failed).catch(error => { if (!artifactsFailed(error, 'NOT_FOUND')) logFailure('import_cleanup_failed', error, { repository: failed }); }));
+      const created = await artifacts.create(name, { setDefaultBranch: branch }).catch(async (error: unknown) => {
+        if (!artifactsFailed(error, 'ALREADY_EXISTS')) throw error;
+        using repo = await artifacts.get(name);
+        const [{ remote }, { plaintext: token }] = await Promise.all([repo.info(), repo.createToken('write', 14_400)]);
+        return { id: '', name, description: null, defaultBranch: branch, remote, token };
+      });
+      // The new repository's own token writes the parts: Artifacts may not open it by name for a moment after creation.
+      await this.copyParts(name, job, { remote: created.remote, token: created.token });
+      return created;
+    } finally { this.copyingParts = false; }
+  }
+  /**
+   * Pushes the mirror's snapshot in parts that Artifacts accepts. Each stored part moves the import's deadline, and
+   * the alarm resumes a copy that stopped with this object: the stored parts are not sent again.
+   */
+  private async copyParts(name: string, job: MirrorJob, created?: GitEndpoint) {
+    const progress = async () => {
+      const pending = await this.ctx.storage.get<PendingProject>('pending-project');
+      if (pending?.name !== name) throw new HttpError(409, 'This import ended.');
+      pending.parts = true; pending.progressAt = now();
+      await this.ctx.storage.put('pending-project', pending);
+    };
+    await progress();
+    const mirror = await this.authorizeMirror(job);
+    const [source, endpoint] = await Promise.all([refreshedMirrorSource(this.env, mirror, job.userId, false), mirrorEndpoint(this.env, mirror, job.userId)]);
+    const { copyInParts } = await import('../github/mirror-parts');
+    const copy = (target: GitEndpoint) => copyInParts({ source: endpoint, target, commit: source.head, branch: source.branch, progress,
+      transfer: () => mirrorTransfer(this.env, mirror.workspaceId, { recordOversize: false }) });
+    if (created) { await copy(created); return; }
+    using repo = await artifactsOf(this.env).get(name);
+    const [{ remote }, { plaintext: token }] = await Promise.all([repo.info(), repo.createToken('write', 14_400)]);
+    try { await copy({ remote, token }); }
+    finally { await repo.revokeToken(token).catch(() => { /* The copy token expires after four hours. */ }); }
+  }
+  /** A copy in parts that stopped with this object, resumed by the alarm; a refusal ends the import as followImport does. */
+  private async resumeParts(pending: PendingProject) {
+    if (this.copyingParts) return;
+    this.copyingParts = true;
+    try { await this.copyParts(pending.name, pending.mirror!); }
+    catch (error) {
+      // A repository Artifacts is still creating is resumed by a later alarm.
+      if (artifactsFailed(error, 'CREATE_IN_PROGRESS')) return;
+      logFailure('repository_import_failed', error, { repository: pending.name });
+      const current = await this.ctx.storage.get<PendingProject>('pending-project');
+      if (current?.name !== pending.name || current.error) return;
+      current.error = await this.importError(current, error);
+      // A replacement that fails leaves the full copy serving, as followImport leaves it.
+      if (current.replaces) { await this.abandonReplacement(current); return; }
+      await this.ctx.storage.put('pending-project', current);
+      await directoryOf(this.env).mirrorUpdated(current.mirror!.workspaceId, { importing: false, error: current.error });
+    } finally { this.copyingParts = false; }
+  }
+  /** A snapshot too large for any copy reads as too large wherever it is read; other refusals keep their reason. */
+  private async importError(pending: PendingProject, failure: unknown): Promise<string> {
+    const code = artifactsCode(failure);
+    const large = failure instanceof GitError && (failure.code === 'too_large' || failure.code === 'full') || code === 'MEMORY_LIMIT'
+      || (pending.mirror && (await directoryOf(this.env).mirrorRecord(pending.mirror.workspaceId))?.error === MIRROR_LARGE);
+    return pending.mirror && large ? MIRROR_LARGE : code && IMPORT_ERRORS[code] || 'The import did not finish. Try again.';
   }
   /**
    * Artifacts refuses every push into a repository at its storage limit, a sync's included, so a full copy is
@@ -1133,16 +1256,16 @@ export class Workspace extends DurableObject<BraidEnv> {
     let created: ArtifactsCreateRepoResult | undefined, failure: unknown;
     try { created = await started; } catch (error) { failure = error; }
     const pending = await this.ctx.storage.get<PendingProject>('pending-project');
-    if (pending?.name !== name || this.data.project.id && this.data.project.id !== pending.replaces) {
+    // A copy in parts took this import over under its own name.
+    if (pending?.name !== name && pending?.partsOf !== name || this.data.project.id && this.data.project.id !== pending.replaces) {
       // The reservation ended meanwhile, so its initial token must not outlive it.
-      if (created) { try { using repo = await artifactsOf(this.env).get(name); await repo.revokeToken(created.token); } catch (error) { logFailure('import_abandoned_token_cleanup_failed', error, { repository: name }); } }
+      if (created) { try { using repo = await artifactsOf(this.env).get(created.name); await repo.revokeToken(created.token); } catch (error) { logFailure('import_abandoned_token_cleanup_failed', error, { repository: name }); } }
       return;
     }
     if (created) { pending.initialToken = created.token; pending.remote = created.remote; pending.branch ??= created.defaultBranch || 'main'; }
     else if (!artifactsFailed(failure, 'ALREADY_EXISTS')) {
       logFailure('repository_import_failed', failure, { repository: name });
-      const code = artifactsCode(failure);
-      pending.error = pending.mirror && ((await directoryOf(this.env).mirrorRecord(pending.mirror.workspaceId))?.error === MIRROR_LARGE || code === 'MEMORY_LIMIT') ? MIRROR_LARGE : code && IMPORT_ERRORS[code] || 'The import did not finish. Try again.';
+      pending.error = await this.importError(pending, failure);
     }
     if (pending.replaces && pending.error) { await this.abandonReplacement(pending); return; }
     await this.ctx.storage.put('pending-project', pending);
@@ -1289,7 +1412,8 @@ export class Workspace extends DurableObject<BraidEnv> {
     try {
       const pending = await this.ctx.storage.get<PendingProject>('pending-project');
       if (!pending?.sourceUrl || !pending.startedAt || pending.error) return;
-      const elapsed = Date.now() - Date.parse(pending.startedAt);
+      // A copy in parts has a deadline from its last stored part, not from its start.
+      const elapsed = Date.now() - Date.parse(pending.progressAt ?? pending.startedAt);
       if (elapsed >= 15 * 60_000) {
         pending.error = 'The import did not finish. Try again.';
         if (pending.replaces) { await this.abandonReplacement(pending); return; }
@@ -1298,6 +1422,8 @@ export class Workspace extends DurableObject<BraidEnv> {
         return;
       }
       const next = Date.now() + Math.min(5_000, 2_000 + Math.floor(elapsed / 10_000) * 1_000);
+      // A copy in parts that stopped with this object resumes; one already on its branch only removes its part refs.
+      if (pending.parts && pending.mirror && !this.copyingParts) this.ctx.waitUntil(this.resumeParts(pending));
       try {
         const head = await this.importHead(pending);
         if (head && !pending.remote) { using repo = await artifactsOf(this.env).get(pending.name); pending.remote = (await repo.info()).remote; }

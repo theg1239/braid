@@ -262,6 +262,59 @@ export async function relay(options: { source: GitEndpoint; target: GitEndpoint;
   } finally { await transfer?.finish(); }
 }
 
+type Transfer = () => Promise<{ wrap(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array>; finish(): Promise<void> }>;
+
+/**
+ * Copies objects by hash from `source` into `target`, each with everything beneath it (a tree brings its directories
+ * and files), and points one ref at each. Past `limit` bytes the push stops and stores nothing; the error code is then
+ * `too_large`, so the caller can ask for less. Returns the pack's size.
+ */
+export async function relayObjects(options: { source: GitEndpoint; target: GitEndpoint; objects: { oid: string; ref: string }[]; limit: number; transfer?: Transfer }): Promise<number> {
+  const { source, target, limit } = options;
+  if (!options.objects.length || !options.objects.every(({ oid }) => /^[a-f0-9]{40}$/.test(oid))) throw new Error('Invalid objects to relay.');
+  const advertised = await advertisement(target, 'git-receive-pack');
+  if (!advertised.capabilities.has('report-status')) throw new GitError('invalid', 'The target cannot confirm updates.');
+  const objects = options.objects.filter(({ oid, ref }) => advertised.refs.get(ref) !== oid);
+  if (!objects.length) return 0;
+  const capabilities = ['no-progress', ...(advertised.capabilities.has('ofs-delta') ? ['ofs-delta'] : [])];
+  const negotiation = [...objects.map(({ oid }, index) => pktLine(`want ${oid}${index ? '' : ` ${capabilities.join(' ')}`}\n`)), FLUSH, pktLine('done\n')];
+  let bytes = 0, over = false;
+  const transfer = await options.transfer?.();
+  try {
+    const fetched = await request(source, 'git-upload-pack', { method: 'POST', body: new Blob(negotiation as BlobPart[]),
+      headers: { 'content-type': 'application/x-git-upload-pack-request', accept: 'application/x-git-upload-pack-result' } });
+    await receive(target, objects.map(({ oid, ref }) => ({ old: advertised.refs.get(ref) ?? ZERO, new: oid, ref })),
+      packStream(limited(transfer ? transfer.wrap(fetched.body!) : fetched.body!, limit, () => { over = true; }, size => { bytes = size; })));
+  } catch (error) {
+    if (over) throw new GitError('too_large', 'These objects are larger than one push may carry.');
+    throw error;
+  } finally { await transfer?.finish(); }
+  return bytes;
+}
+
+/** One commit and every tree beneath it, without file contents, as a complete pack of at most `limit` bytes. */
+export async function fetchTrees(source: GitEndpoint, commit: string, limit: number): Promise<Uint8Array> {
+  if (!/^[a-f0-9]{40}$/.test(commit)) throw new Error('Invalid commit to fetch.');
+  const negotiation = [pktLine(`want ${commit} no-progress shallow filter ofs-delta\n`), pktLine('deepen 1\n'), pktLine('filter blob:none\n'), FLUSH, pktLine('done\n')];
+  let over = false;
+  const fetched = await request(source, 'git-upload-pack', { method: 'POST', body: new Blob(negotiation as BlobPart[]),
+    headers: { 'content-type': 'application/x-git-upload-pack-request', accept: 'application/x-git-upload-pack-result' } });
+  try { return new Uint8Array(await new Response(packStream(limited(fetched.body!, limit, () => { over = true; }))).arrayBuffer()); }
+  catch (error) {
+    if (over) throw new GitError('too_large', 'The directories of this commit are larger than Braid reads at once.');
+    throw error;
+  }
+}
+
+/** Deletes refs the target holds, with compare-and-swap on each; a delete carries no pack. */
+export async function deleteRefs(target: GitEndpoint, refs: { ref: string; old: string }[]) {
+  if (!refs.length) return;
+  const body = [...refs.map(({ ref, old }, index) => pktLine(`${old} ${ZERO} ${ref}${index ? '' : '\0report-status delete-refs'}\n`)), FLUSH];
+  const response = await request(target, 'git-receive-pack', { method: 'POST', body: new Blob(body as BlobPart[]),
+    headers: { 'content-type': 'application/x-git-receive-pack-request', accept: 'application/x-git-receive-pack-result' } });
+  await report(response, refs.map(({ ref }) => ref));
+}
+
 /** A stream that fails once more than `max` bytes have passed through it; `passed` hears the running size. */
 export function limited(stream: ReadableStream<Uint8Array>, max: number, exceeded: () => void, passed?: (size: number) => void): ReadableStream<Uint8Array> {
   let size = 0;

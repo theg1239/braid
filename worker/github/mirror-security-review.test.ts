@@ -218,9 +218,14 @@ describe('mirror security review: claims, admission, and confidentiality', () =>
     expect(await f.directory.resolveRepository(null, 'alice', 'repo')).toMatchObject({ ok: false });
     expect(f.workspace.fetch).not.toHaveBeenCalled();
   });
-  it('does not list unclaimed mirrors in Explore and hides withdrawn mirrors from owner pages', async () => {
-    const f = fixture(); requireMirror(await f.directory.resolveMirror(null, 'alice', 'repo', 'network'));
+  it('lists a public mirror in Explore only once its first copy is ready and without errors, and hides withdrawn mirrors from owner pages', async () => {
+    const f = fixture(); const { workspaceId } = requireMirror(await f.directory.resolveMirror(null, 'alice', 'repo', 'network'));
     expect((await f.directory.publicRepositories(30)).items).toEqual([]);
+    f.directory.mirrorUpdated(workspaceId, { syncedAt: new Date().toISOString(), importing: false });
+    expect((await f.directory.publicRepositories(30)).items.map(item => `${item.owner.slug}/${item.repo.slug}`)).toEqual(['alice/repo']);
+    f.directory.mirrorUpdated(workspaceId, { error: 'The GitHub mirror could not be prepared.' });
+    expect((await f.directory.publicRepositories(30)).items).toEqual([]);
+    f.directory.mirrorUpdated(workspaceId, { error: null });
     f.state.visible = false; await publicMirrorSource(f.env, 'alice/repo', true).catch(() => {});
     const page = await f.directory.mirrorOwnerRepositories(null, 'alice');
     expect(page.ok ? page.data.repositories : []).toEqual([]);
@@ -368,6 +373,7 @@ describe('mirror security review: private gateway and transport matrix', () => {
     await f.directory.accept(bob, (await f.directory.invite(alice.id, org.id, { email: bob.email, role: 'member' })).token);
     f.state.visible = false; f.state.privateReaders.add(alice.id);
     const repo = requireMirror(await f.directory.resolveMirror(alice, 'acme', 'payroll', 'network'));
+    f.directory.mirrorUpdated(repo.workspaceId, { syncedAt: new Date().toISOString(), importing: false });
     expect((await f.directory.publicRepositories(30)).items).toEqual([]);
     expect(JSON.stringify(await f.directory.mirrorOwnerRepositories(bob, 'acme'))).not.toContain('payroll');
     const account = await f.request('/api/account', bob);

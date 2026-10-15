@@ -79,6 +79,8 @@ export interface BraidEnv {
   GITHUB_APP_CLIENT_SECRET: string;
   GITHUB_APP_PRIVATE_KEY: string;
   GITHUB_APP_WEBHOOK_SECRET?: string;
+  /** The operator's key for seeding mirrors past the visitor admission budget; declared only where an operator seeds. */
+  MIRROR_SEED_TOKEN?: string;
   SESSION_SECRET: string;
   PUBLIC_ORIGIN: string;
   SIGNUP_ENABLED: string;

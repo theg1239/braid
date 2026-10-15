@@ -128,9 +128,13 @@ export class Directory extends DurableObject<BraidEnv> {
     if (!Number.isSafeInteger(bytes) || bytes <= 0 || bytes > MIRROR_TOTAL_BYTES) return false;
     return this.ctx.storage.transactionSync(() => {
       const row = this.ctx.storage.sql.exec<{ bytes: number; enabled: number; error: string | null; syncedAt: string | null }>('SELECT bytes, enabled, error, synced_at AS syncedAt FROM mirrors WHERE workspace = ?', workspaceId).toArray()[0];
-      if (!row || row.enabled || row.error) return false;
+      if (!row || row.enabled || row.error) { console.warn(JSON.stringify({ event: 'mirror_transfer_refused', workspaceId, reason: !row ? 'missing' : row.enabled ? 'enabled' : 'error', error: row?.error ?? null })); return false; }
       // Past the budget, a mirror that already serves its default branch only stops copying more history; one that never finished importing is too large.
-      if (row.bytes + bytes > MIRROR_TOTAL_BYTES) { if (row.syncedAt === null) this.mirrorUpdated(workspaceId, { importing: false, error: MIRROR_LARGE }); return false; }
+      if (row.bytes + bytes > MIRROR_TOTAL_BYTES) {
+        console.warn(JSON.stringify({ event: 'mirror_transfer_refused', workspaceId, reason: 'budget', used: row.bytes, asked: bytes }));
+        if (row.syncedAt === null) this.mirrorUpdated(workspaceId, { importing: false, error: MIRROR_LARGE });
+        return false;
+      }
       this.ctx.storage.sql.exec('UPDATE mirrors SET bytes = bytes + ? WHERE workspace = ?', bytes, workspaceId); return true;
     });
   }
@@ -217,7 +221,11 @@ export class Directory extends DurableObject<BraidEnv> {
   private addressWorkspace(owner: string, repo: string): string | undefined {
     return this.ctx.storage.sql.exec<{ id: string }>('SELECT r.workspace_id AS id FROM repository_addresses r JOIN team_addresses a ON a.team_id = r.team_id WHERE a.slug = ? COLLATE NOCASE AND r.slug = ? COLLATE NOCASE', owner, repo).toArray()[0]?.id;
   }
-  async resolveMirror(user: AccountIdentity | null, owner: string, repo: string, network: string): Promise<Result<RepositoryAddress>> {
+  /**
+   * `seeded` is the operator's seeding: it skips the visitor admission budget, and it tries a failed first copy again.
+   * The total mirror cap still applies.
+   */
+  async resolveMirror(user: AccountIdentity | null, owner: string, repo: string, network: string, { seeded = false }: { seeded?: boolean } = {}): Promise<Result<RepositoryAddress>> {
     try {
       let workspaceId = this.addressWorkspace(owner, repo);
       if (!workspaceId) {
@@ -227,7 +235,7 @@ export class Directory extends DurableObject<BraidEnv> {
         if (!creating) {
           creating = (async () => {
             // Charge attempts, including unavailable sources, before any upstream lookup. Coalesced visits share it.
-            this.ctx.storage.transactionSync(() => this.mirrorBudget(network));
+            if (!seeded) this.ctx.storage.transactionSync(() => this.mirrorBudget(network));
             const source = await mirrorSource(this.env, key, user);
             const existing = this.mirrorOwner(owner), pinned = existing?.pinned;
             if (existing && (!existing.mirror || pinned) && !source.namespaceId) {
@@ -260,6 +268,13 @@ export class Directory extends DurableObject<BraidEnv> {
         }
         await creating;
         workspaceId = this.addressWorkspace(owner, repo);
+      }
+      // The operator's seeding asks the repository to try a failed copy again. Only the repository knows whether its
+      // import ended or is still running, so it decides; a frozen namespace stays frozen.
+      const failed = seeded && workspaceId ? this.mirrorRecord(workspaceId) : null;
+      if (failed?.error && failed.error !== MIRROR_NAMESPACE_CHANGED) {
+        await this.env.WORKSPACES.getByName(repositoryKey(failed.teamId, failed.workspaceId)).retryMirror(failed, user?.id);
+        this.mirrorTouches.delete(failed.workspaceId);
       }
       if (workspaceId) await this.checkMirrorRead(workspaceId, user?.id ?? null);
       const result = await this.resolveRepository(user?.id ?? null, owner, repo);
@@ -609,9 +624,10 @@ export class Directory extends DurableObject<BraidEnv> {
     // Literal substrings keep %, _ and quotes as text, never SQL patterns.
     const search = q ? ' AND (instr(t.slug, ?) > 0 OR instr(t.search_name, ?) > 0 OR instr(w.slug, ?) > 0 OR instr(w.search_name, ?) > 0 OR instr(w.search_description, ?) > 0)' : '';
     const bindings = q ? [q, q, q, q, q] : [];
-    // Unclaimed copies are discovered by address/owner, where current GitHub visibility is checked. Bulk discovery
-    // must not disclose a mirror that became private before its next visitor refreshed that lease.
-    const from = `FROM workspaces w JOIN teams t ON t.id = w.team_id WHERE w.visibility = 'public' AND w.has_commits = 1 AND NOT EXISTS (SELECT 1 FROM mirrors gm WHERE gm.workspace = w.id)${search}`;
+    // A public mirror is listed once its first copy is ready and while it has no error. A source that turns private
+    // leaves the list at its next visit, which rechecks GitHub; until then Explore shows only the name it had in public.
+    const listed = '(w.has_commits = 1 AND NOT EXISTS (SELECT 1 FROM mirrors gm WHERE gm.workspace = w.id) OR EXISTS (SELECT 1 FROM mirrors gm WHERE gm.workspace = w.id AND gm.private = 0 AND gm.synced_at IS NOT NULL AND gm.error IS NULL))';
+    const from = `FROM workspaces w JOIN teams t ON t.id = w.team_id WHERE w.visibility = 'public' AND ${listed}${search}`;
     const after = !cursor ? '' : cursor.sort === 'name'
       ? ' AND (w.search_name, w.id) > (?, ?)'
       : ' AND (w.updated_at, w.id) < (?, ?)';

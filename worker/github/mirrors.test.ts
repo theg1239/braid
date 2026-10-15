@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
+import api from '../http/api';
 import { mirrorFixture, mirrorAlice as alice, mirrorBob as bob } from '../test/mirror';
 import { MIRROR_SYNC_MS, MIRROR_TOTAL_BYTES, MIRROR_PACK_BYTES, MIRROR_LARGE, MIRROR_NAMESPACE_CHANGED, mirrorTransfer } from './mirrors';
 import { HISTORY_RETRY_MS } from '../workspace/workspace';
@@ -82,14 +83,83 @@ describe('GitHub mirror lifecycle with production-shaped Artifacts', () => {
     expect((await f.request('/api/owners/alice', bob)).status).toBe(200);
     expect(await (await f.request('/api/owners/alice', bob)).json()).toMatchObject({ repositories: [] });
   });
-  it('uses token size metadata before reserving a private import', async () => {
+  it('imports a private repository whatever size GitHub reports for its history', async () => {
     const f = await fixture(); f.state.private = true; f.state.size = MIRROR_TOTAL_BYTES / 1024 + 1;
     const response = await f.request('/api/repos/alice/repo', alice);
-    expect(response.status).toBe(413); expect(await response.json()).toMatchObject({ error: MIRROR_LARGE, code: 'mirror_too_large' });
-    expect(f.artifacts.import).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    await f.directoryDb.settled(); f.completeImport(); await f.drain();
+    expect(f.artifacts.import).toHaveBeenCalledTimes(1);
   });
-  it('answers a mirror too large to import with its code wherever it is read', async () => {
+  it('shows an import only HEAD and the default branch, not the pull request refs GitHub lists', async () => {
     const f = await fixture();
+    f.github.git(['update-ref', 'refs/pull/7/head', f.head]);
+    let listed = '';
+    f.artifacts.import.mockImplementationOnce(async (options: { source: { url: string } }) => {
+      const refs = await api.fetch(new Request(`${options.source.url}/info/refs?service=git-upload-pack`), f.env);
+      listed = new TextDecoder().decode(await refs.arrayBuffer());
+      throw Object.assign(new Error('Stopped after the advertisement.'), { code: 'INVALID_INPUT' });
+    });
+    await address(f); await f.directoryDb.settled(); await f.drain();
+    expect(listed).toContain(`${f.head} HEAD\0`);
+    expect(listed).toContain('symref=HEAD:refs/heads/main');
+    expect(listed).toContain(`${f.head} refs/heads/main\n`);
+    expect(listed).not.toContain('refs/pull/');
+  });
+  it('copies a mirror too large for one import in parts, then serves it', async () => {
+    const f = await fixture();
+    f.artifacts.import.mockRejectedValueOnce(Object.assign(new Error('Out of memory.'), { code: 'MEMORY_LIMIT' }));
+    const repo = await address(f);
+    await f.directoryDb.settled(); await f.drain();
+    expect(f.artifacts.create).toHaveBeenCalledTimes(1);
+    const mirror = f.directory.mirrorRecord(repo.workspaceId)!;
+    await f.getWorkspace(`team:${mirror.teamId}:repository:${repo.workspaceId}`).workspace.alarm(); await f.drain();
+    const file = await f.request('/api/repository?path=README.md', alice, { 'x-braid-workspace': repo.workspaceId });
+    expect(file.status, await file.clone().text()).toBe(200);
+    expect(await file.json()).toMatchObject({ content: '# Mirror\nHello\n' });
+    expect(f.target.native(['for-each-ref', 'refs/braid/parts/']).trim()).toBe('');
+  });
+  it('copies in parts after the bridge stops an import at the import limit', async () => {
+    const f = await fixture();
+    f.artifacts.import.mockImplementationOnce(async () => {
+      // As the bridge does past MIRROR_IMPORT_BYTES; Artifacts then names no cause.
+      const { workspace } = f.directoryDb.storage.sql.exec<{ workspace: string }>('SELECT workspace FROM mirrors').one();
+      f.directory.mirrorUpdated(workspace, { importing: false, error: MIRROR_LARGE });
+      throw Object.assign(new Error('The import failed.'), { code: 'INTERNAL_ERROR' });
+    });
+    const repo = await address(f);
+    await f.directoryDb.settled(); await f.drain();
+    expect(f.artifacts.create).toHaveBeenCalledTimes(1);
+    const mirror = f.directory.mirrorRecord(repo.workspaceId)!;
+    expect(mirror.error).toBeNull();
+    await f.getWorkspace(`team:${mirror.teamId}:repository:${repo.workspaceId}`).workspace.alarm(); await f.drain();
+    const file = await f.request('/api/repository?path=README.md', alice, { 'x-braid-workspace': repo.workspaceId });
+    expect(file.status, await file.clone().text()).toBe(200);
+  });
+  it("tries a failed first copy again only for the operator's seeding key, under a new name", async () => {
+    const f = await fixture(); f.state.refusePushes = true; f.env.MIRROR_SEED_TOKEN = 's'.repeat(40);
+    f.artifacts.import.mockRejectedValueOnce(Object.assign(new Error('Out of memory.'), { code: 'MEMORY_LIMIT' }));
+    const repo = await address(f);
+    await f.directoryDb.settled(); await f.drain();
+    expect((await f.request('/api/repos/alice/repo', alice)).status).toBe(413);
+    f.state.refusePushes = false;
+    // The copy in parts took its own name; the failed import's name was let go.
+    const failed = f.artifacts.create.mock.lastCall![0], first = f.artifacts.import.mock.lastCall![0].target.name;
+    expect(failed).toBe(`${first}-parts`);
+    expect(f.artifacts.delete).toHaveBeenCalledWith(first);
+    // Earlier tries spent the transfer budget; a retry starts with all of it.
+    f.directoryDb.storage.sql.exec('UPDATE mirrors SET bytes = ?', MIRROR_TOTAL_BYTES);
+    const seeded = await f.request('/api/repos/alice/repo', undefined, { 'x-braid-mirror-seed': 's'.repeat(40) });
+    expect(seeded.status, await seeded.clone().text()).toBe(200);
+    await f.directoryDb.settled(); f.completeImport(); await f.drain();
+    expect(f.artifacts.import.mock.lastCall![0].target.name).toMatch(new RegExp(`^${first}-[a-z0-9]+$`));
+    expect(f.artifacts.delete).toHaveBeenCalledWith(failed);
+    const mirror = f.directory.mirrorRecord(repo.workspaceId)!;
+    await f.getWorkspace(`team:${mirror.teamId}:repository:${repo.workspaceId}`).workspace.alarm(); await f.drain();
+    const file = await f.request('/api/repository?path=README.md', alice, { 'x-braid-workspace': repo.workspaceId });
+    expect(file.status, await file.clone().text()).toBe(200);
+  });
+  it('answers a mirror too large to copy with its code wherever it is read', async () => {
+    const f = await fixture(); f.state.refusePushes = true;
     f.artifacts.import.mockRejectedValueOnce(Object.assign(new Error('Out of memory.'), { code: 'MEMORY_LIMIT' }));
     const repo = await address(f);
     await f.directoryDb.settled(); await f.drain();
@@ -222,6 +292,35 @@ describe('GitHub mirror lifecycle with production-shaped Artifacts', () => {
     const mirror = f.directory.mirrorRecord(repo.workspaceId)!;
     return { f, line, limit, repo, ws: f.getWorkspace(`team:${mirror.teamId}:repository:${repo.workspaceId}`), name: `mirror-${repo.workspaceId.replaceAll('-', '')}` };
   }
+  it("lets the operator's seeding clear an orphaned error only after confirming the serving copy", async () => {
+    const { f, repo, ws } = await fillable();
+    await ws.workspace.alarm(); await f.drain();
+    f.env.MIRROR_SEED_TOKEN = 's'.repeat(40);
+    expect(await ws.db.storage.get('pending-project')).toBeUndefined();
+    f.directory.mirrorUpdated(repo.workspaceId, { error: 'The import did not finish. Try again.' });
+    expect((await f.request('/api/repos/alice/repo')).status).toBe(502);
+    const seeded = await f.request('/api/repos/alice/repo', undefined, { 'x-braid-mirror-seed': 's'.repeat(40) });
+    expect(seeded.status, await seeded.clone().text()).toBe(200);
+    expect(f.directory.mirrorRecord(repo.workspaceId)?.error).toBeNull();
+    const file = await f.request('/api/repository?path=README.md', undefined, { 'x-braid-workspace': repo.workspaceId });
+    expect(file.status, await file.clone().text()).toBe(200);
+  });
+  it("lets the operator's seeding drop a failed replacement that left the serving copy marked failed", async () => {
+    const { f, repo, ws } = await fillable();
+    await ws.workspace.alarm(); await f.drain();
+    f.env.MIRROR_SEED_TOKEN = 's'.repeat(40);
+    // The state an interrupted copy in parts once left: a failed replacement, and the error on the serving mirror.
+    await ws.db.storage.put('pending-project', { name: 'mirror-replacement-parts', displayName: 'repo', description: '', mirror: { workspaceId: repo.workspaceId, fullName: 'alice/repo' },
+      replaces: (await ws.db.storage.get<{ project: { id: string } }>('state'))?.project.id ?? 'mirror', error: 'The import did not finish. Try again.', startedAt: new Date().toISOString(), sourceUrl: 'https://github.com/alice/repo.git' });
+    f.directory.mirrorUpdated(repo.workspaceId, { error: 'The import did not finish. Try again.' });
+    expect((await f.request('/api/repos/alice/repo')).status).toBe(502);
+    const seeded = await f.request('/api/repos/alice/repo', undefined, { 'x-braid-mirror-seed': 's'.repeat(40) });
+    expect(seeded.status, await seeded.clone().text()).toBe(200);
+    expect(await ws.db.storage.get('pending-project')).toBeUndefined();
+    expect(f.directory.mirrorRecord(repo.workspaceId)?.error).toBeNull();
+    const file = await f.request('/api/repository?path=README.md', undefined, { 'x-braid-workspace': repo.workspaceId });
+    expect(file.status, await file.clone().text()).toBe(200);
+  });
   it('replaces a copy a sync finds full with a fresh import whose history keeps a share of the old depth', async () => {
     const { f, line, limit, repo, ws, name } = await fillable();
     await ws.workspace.alarm(); await f.drain();

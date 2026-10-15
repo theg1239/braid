@@ -581,7 +581,9 @@ async function accountRoute(request: Request, env: BraidEnv, url: URL, user: Acc
     if (!parsed.success) throw new HttpError(404, 'Repository not found.');
     if (!user || !await directory.addressMember(user.id, parsed.output.owner, parsed.output.repo)) await anonymousBudget();
     let result: Awaited<ReturnType<Directory['resolveMirror']>> = await directory.resolveRepository(user?.id ?? null, parsed.output.owner, parsed.output.repo);
-    if (!agentScope && (!result.ok || result.data.mirror)) result = await directory.resolveMirror(user, parsed.output.owner, parsed.output.repo, network);
+    // The operator's seeding key, at least 32 characters, skips the visitor admission budget.
+    const seeded = (env.MIRROR_SEED_TOKEN?.length ?? 0) >= 32 && await equalSecret(request.headers.get('x-braid-mirror-seed') ?? '', env.MIRROR_SEED_TOKEN!);
+    if (!agentScope && (!result.ok || result.data.mirror)) result = await directory.resolveMirror(user, parsed.output.owner, parsed.output.repo, network, { seeded });
     const found = unwrap(result);
     if (agentWorkspace && found.workspaceId !== agentWorkspace) throw new HttpError(404, 'Repository not found.');
     return Response.json(publicMetadata({ ...found, canWrite: found.canWrite && agentScope !== 'read' }));

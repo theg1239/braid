@@ -30,7 +30,7 @@ A private source needs the visiting person's own GitHub token.
 - Braid checks the person's access to the repository at each visit. The check is valid for 60 seconds or less, for one person, one token and one repository.
 - Membership of the Braid owner does not replace this check.
 - Private mirrors have no shared edge cache. They are not in Explore, cross-repository search, social previews or anonymous MCP and Git reads.
-- No mirror, public or private, is in bulk public discovery.
+- Explore lists a public mirror when its first copy is ready and it has no error. If the source becomes private, the mirror leaves Explore at its next visit, when Braid checks GitHub again. Until then, Explore shows only the name that was public.
 - Owner and account lists show a mirror only if the current access check succeeds.
 
 ## API
@@ -120,6 +120,17 @@ Only an organization can be linked. Only its own owner can link it, and only onc
 - The first history copy includes up to 300 branches. Braid does not refresh the other branches periodically.
 - After a claim, Braid's normal repository and GitHub-link workflows replace the automatic mirror maintenance.
 
+### Copies in parts
+
+The first copy is one import, one commit deep. If the bridge stops that import at its limit, or Artifacts runs out of memory, Braid copies the same commit in parts:
+
+1. Braid creates an empty repository and reads the commit's directories from GitHub, without file contents.
+2. Each directory that fits in one push goes to a hidden ref, `refs/braid/parts/<tree>`. GitHub sends the directory with everything in it.
+3. A directory that does not fit is split into its directories and batches of its files. Then its own tree follows.
+4. The commit goes last, onto the default branch. Then Braid deletes the part refs.
+
+The parts stay on their refs, so a copy that stops continues where it was. The import deadline of 15 minutes counts from the last part. Artifacts limits remain: 1 GB for each repository and 32 MB for each file. A file that one push cannot carry makes the mirror too large.
+
 ### Full copies
 
 Artifacts holds 1 GB for each repository. It counts objects one by one, and it refuses all pushes after the limit. If a copy becomes full, Braid replaces it:
@@ -136,13 +147,15 @@ Braid charges each attempt before it contacts GitHub, also when the source is no
 - 200 attempts for each UTC day, for all networks.
 - 1,000 mirrors in total.
 - First visits at the same time share one attempt.
+- A request with the operator's seeding key in `x-braid-mirror-seed` uses no attempts. It also starts a failed first copy again, under a new repository name. A failed replacement is removed so the full copy can serve reads and sync again. The limit of 1,000 mirrors still applies. [PRODUCTION.md](PRODUCTION.md) gives the setup.
 
 Transfer limits:
 
 - An advertisement for admission or for the import bridge: 1 MiB. The background branch reader: 4 MiB.
-- Each pack transfer: 64 MiB.
+- An import through the bridge: 36 MiB. Artifacts refuses an import above about 40 MB.
+- Each part of a copy in parts: 24 MiB. One file alone: 29 MiB.
+- Each other pack transfer: 64 MiB.
 - All imported and transferred data for one mirror: 2 GiB. A replacement copy starts with the full budget.
-- Braid refuses a source before the import if GitHub reports a size above 2 GiB.
 - After a crash, transfer reservations stay counted.
 - These limits measure transfers. They do not measure the size of a working tree.
 

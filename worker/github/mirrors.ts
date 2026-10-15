@@ -3,7 +3,7 @@ import type { AccountIdentity } from '../../shared/account';
 import { RESERVED_OWNERS, SLUG } from '../../shared/routes';
 import { directoryOf, securityOf, type BraidEnv } from '../env';
 import { HttpError } from '../errors';
-import { readAdvertisement, authorization, GitError, type GitEndpoint } from '../git/transport';
+import { readAdvertisement, authorization, FLUSH, GitError, pktLine, type GitEndpoint } from '../git/transport';
 import { userApi } from './routes';
 import { githubNamespace, githubOrganizationMembership, githubMirrorHead, githubMirrorRepository, repositoryAddress, parseFrom } from '../schemas';
 import { digest } from '../http/auth';
@@ -19,6 +19,11 @@ const MIRROR_MISSING = "Not found on GitHub. If it's private, sign in with GitHu
 export const MIRROR_NOT_FOUND_CODE = 'github_not_found_or_private';
 export const MIRROR_PRIVATE_ACCESS_MS = 60_000;
 export const MIRROR_PACK_BYTES = 64 * 1024 * 1024;
+/**
+ * Artifacts refuses an import above about 40 MB without naming the cause. The bridge stops a larger one first and
+ * marks the mirror too large, so the workspace knows to copy the snapshot in parts instead.
+ */
+export const MIRROR_IMPORT_BYTES = 36 * 1024 * 1024;
 /**
  * Bytes a mirror may transfer for its import, history, branches and syncs. Artifacts stores at most 1 GB a repository,
  * and transfers also carry objects a repository already has. Reaching it stops copying, never what the mirror serves.
@@ -84,9 +89,8 @@ export async function privateMirrorRepository(env: BraidEnv, userId: string | nu
     try {
       const repo = parsePrivateRepository(await userApi(env, userId, repositoryId ? `/repositories/${repositoryId}` : `/repos/${fullName}`));
       if (repo.disabled || repo.full_name.toLowerCase() !== fullName || repositoryId && repo.id !== repositoryId) throw mirrorNotFound(true);
-      if (repo.size > MIRROR_TOTAL_BYTES / 1024) throw mirrorTooLarge();
       return repo;
-    } catch (error) { if (error instanceof HttpError && error.status === 413) throw error; throw mirrorNotFound(true); }
+    } catch { throw mirrorNotFound(true); }
   })();
   cache.set(key, { until: Date.now() + MIRROR_PRIVATE_ACCESS_MS, answer });
   return answer;
@@ -131,8 +135,12 @@ export async function refreshedMirrorSource(env: BraidEnv, mirror: MirrorRecord,
   if (mirror.namespaceId) await mirrorNamespaceProof(env, mirror, userId ?? null);
   return publicMirrorSource(env, mirror.fullName, fresh);
 }
-/** Reserve before fetching, refund only bytes that never arrived. Crashes conservatively retain the reservation. */
-export async function mirrorTransfer(env: BraidEnv, workspaceId: string) {
+/**
+ * Reserve before fetching, refund only bytes that never arrived. Crashes conservatively retain the reservation.
+ * A transfer past its limit marks the mirror too large, unless the caller splits what it asked for, as a copy in
+ * parts does.
+ */
+export async function mirrorTransfer(env: BraidEnv, workspaceId: string, { recordOversize = true }: { recordOversize?: boolean } = {}) {
   const directory = directoryOf(env);
   const reserved = await directory.reserveMirrorBytes(workspaceId, MIRROR_PACK_BYTES);
   if (!reserved) throw mirrorTooLarge();
@@ -151,7 +159,7 @@ export async function mirrorTransfer(env: BraidEnv, workspaceId: string) {
             if (chunk.value.byteLength > limit - used) {
               charged = MIRROR_PACK_BYTES;
               await reader.cancel();
-              await directory.mirrorUpdated(workspaceId, { importing: false, error: MIRROR_LARGE });
+              if (recordOversize) await directory.mirrorUpdated(workspaceId, { importing: false, error: MIRROR_LARGE });
               throw mirrorTooLarge();
             }
             used += chunk.value.byteLength; controller.enqueue(chunk.value);
@@ -161,6 +169,16 @@ export async function mirrorTransfer(env: BraidEnv, workspaceId: string) {
       });
     },
   };
+}
+/**
+ * The import's view of GitHub's refs: HEAD and the default branch it names. An import copies one branch one commit
+ * deep, and GitHub also lists every pull request, which makes the list too long for Artifacts to read on large repositories.
+ */
+async function importRefs(advertised: Response): Promise<Blob> {
+  const { refs, capabilities } = await readAdvertisement(advertised, 'git-upload-pack', MIRROR_ADVERTISEMENT_BYTES);
+  const branch = [...capabilities].find(capability => capability.startsWith('symref=HEAD:'))?.slice('symref=HEAD:'.length);
+  const kept = [['HEAD', refs.get('HEAD')], [branch, branch && refs.get(branch)]].filter((pair): pair is [string, string] => !!pair[0] && !!pair[1]);
+  return new Blob([pktLine('# service=git-upload-pack\n'), FLUSH, ...kept.map(([ref, oid], index) => pktLine(`${oid} ${ref}${index ? '' : `\0${[...capabilities].join(' ')}`}\n`)), FLUSH] as BlobPart[]);
 }
 /** An opaque capability identifies an import, never a GitHub token. Every bridge request rechecks its authority. */
 export async function mirrorImportSource(env: BraidEnv, mirror: MirrorRecord, userId?: string): Promise<string> {
@@ -185,7 +203,8 @@ export async function mirrorImportTransport(request: Request, env: BraidEnv, gra
     });
     const type = `application/x-git-upload-pack-${advertisement ? 'advertisement' : 'result'}`;
     if (!upstream.ok || !upstream.body || !upstream.headers.get('content-type')?.startsWith(type)) { await upstream.body?.cancel(); throw new HttpError(502, 'GitHub could not complete the repository transfer.'); }
-    return new Response(transfer.wrap(upstream.body, advertisement ? MIRROR_ADVERTISEMENT_BYTES : MIRROR_PACK_BYTES), { headers: { 'content-type': type, 'cache-control': 'no-store' } });
+    if (advertisement) return new Response(await importRefs(new Response(transfer.wrap(upstream.body, MIRROR_ADVERTISEMENT_BYTES), { headers: { 'content-type': type } })), { headers: { 'content-type': type, 'cache-control': 'no-store' } });
+    return new Response(transfer.wrap(upstream.body, MIRROR_IMPORT_BYTES), { headers: { 'content-type': type, 'cache-control': 'no-store' } });
   } catch (error) { await transfer.finish(); throw error; }
 }
 const publicSources = new WeakMap<BraidEnv, Map<string, CacheEntry<MirrorSource>>>();

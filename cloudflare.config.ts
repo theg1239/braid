@@ -65,6 +65,8 @@ return {
       // Webhooks only speed GitHub sync up; the landing queue also polls, so they are enabled explicitly once the App sends them.
       ...(process.env.BRAID_GITHUB_APP_ID && process.env.BRAID_GITHUB_WEBHOOKS === '1' ? { GITHUB_APP_WEBHOOK_SECRET: bindings.secret() } : {}),
       ...(authMode === 'github' ? { GITHUB_CLIENT_SECRET: bindings.secret(), SESSION_SECRET: bindings.secret() } : {}),
+      // An operator who seeds mirrors past the visitor admission budget sets BRAID_MIRROR_SEEDING=1 and the secret.
+      ...(process.env.BRAID_MIRROR_SEEDING === '1' ? { MIRROR_SEED_TOKEN: bindings.secret() } : {}),
       EMAIL_FROM: bindings.text(process.env.BRAID_EMAIL_FROM || ''),
       BUILD_ID: bindings.text(Date.now().toString(36)),
       ...(process.env.BRAID_EMAIL_FROM ? { EMAIL: bindings.sendEmail({ allowedSenderAddresses: [process.env.BRAID_EMAIL_FROM] }) } : {}),

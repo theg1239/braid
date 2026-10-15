@@ -9,7 +9,7 @@ import { textOf } from '../../test/fixtures';
 vi.mock('../../lib/resources', () => ({ useRead: vi.fn() }));
 vi.mock('../../store/workspace', () => ({ useSnapshot: vi.fn() }));
 vi.mock('../../lib/hooks', () => ({ useNow: () => Date.parse('2026-10-14T10:00:12Z') }));
-import { aggregateHistory, completeHistory, mirrorHistory } from './mirror-history';
+import { aggregateHistory, mirrorHistory } from './mirror-history';
 import { ImportBar } from './ImportBar';
 
 const hash = (value: string) => createHash('sha1').update(value).digest('hex');
@@ -54,22 +54,13 @@ describe('mirror authorship', () => {
     expect(aggregateHistory(page(312, null).items, 300).total).toBe(300);
     expect(aggregateHistory(page(12, null).items).total).toBe(12);
   });
-  it('hides incomplete and shallow samples, but allows complete short repositories', () => {
-    expect(completeHistory(undefined, false)).toBe(false);
-    expect(completeHistory(page(1, null), true)).toBe(false);
-    expect(completeHistory(page(30, 'next'), false)).toBe(false);
-    expect(completeHistory(page(100, 'next'), true)).toBe(true);
-    expect(completeHistory(page(12, null), false)).toBe(true);
-  });
-  it('shares one 100-commit request across Code and Agents and pins subsequent pages to that tip', async () => {
+  it('reads the 100 newest commits once per tip for the commit row on Code', async () => {
     const first = page(100, 'next');
     const read = vi.spyOn(api, 'commits').mockResolvedValue(first);
     await Promise.all([mirrorHistory.load(first.ref, false), mirrorHistory.load(first.ref, false)]);
     await mirrorHistory.load(first.ref, false);
     expect(read).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledWith(first.ref, '', null, 100);
-    await mirrorHistory.load(first.ref, false, 'next');
-    expect(read).toHaveBeenLastCalledWith(first.ref, '', 'next', 100);
   });
   it('re-reads completed ancestry at the same tip and forgets another workspace’s data', async () => {
     const first = page(1, null);

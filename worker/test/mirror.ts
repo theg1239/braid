@@ -26,8 +26,10 @@ export async function mirrorFixture() {
   source.native(['update-ref', 'refs/heads/main', head]);
   const github = fakeGitHub({ root: source.root, gitOrigin: new URL(source.remote).origin, fullName: 'alice/repo' });
   github.git(['fetch', `file://${join(source.root, 'repo.git')}`, 'main:refs/heads/main']);
+  // As GitHub does: filtered packs, and any reachable tree or file by hash, for copies in parts.
+  github.git(['config', 'uploadpack.allowFilter', 'true']); github.git(['config', 'uploadpack.allowAnySHA1InWant', 'true']);
   const baseFetch = globalThis.fetch;
-  const state = { private: false, readable: new Set([mirrorAlice.id]), size: 8, orgRole: 'admin', orgState: 'active', missing: false, restLimited: false };
+  const state = { private: false, readable: new Set([mirrorAlice.id]), size: 8, orgRole: 'admin', orgState: 'active', missing: false, restLimited: false, refusePushes: false };
   const profiles = new Map([[mirrorAlice.id, { id: 101, login: 'alice', type: 'User' }], [mirrorBob.id, { id: 202, login: 'bob', type: 'User' }]]);
   const network = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -50,6 +52,8 @@ export async function mirrorFixture() {
       }
       throw new Error(`No App authority is available in mirror tests: ${url.pathname}`);
     }
+    // Artifacts answers 413 to a push larger than it takes.
+    if (state.refusePushes && url.href.startsWith(target.remote) && url.pathname.endsWith('/git-receive-pack')) return new Response('', { status: 413 });
     return baseFetch(input, init);
   });
   vi.stubGlobal('fetch', network);
@@ -82,6 +86,14 @@ export async function mirrorFixture() {
       // Artifacts takes the shallow pushes that copy history beneath the imported tip.
       target.native(['config', 'http.receivepack', 'true']); target.native(['config', 'receive.shallowUpdate', 'true']); imported = true; current = options.target.name;
       return { name: options.target.name, remote: target.remote, defaultBranch: 'main', token: 'initial-fixture-token' };
+    }),
+    create: vi.fn(async (name: string, opts?: { setDefaultBranch?: string }) => {
+      const branch = opts?.setDefaultBranch ?? 'main';
+      rmSync(join(target.root, 'repo.git'), { force: true, recursive: true });
+      execFileSync('git', ['init', '--quiet', '--bare', `--initial-branch=${branch}`, join(target.root, 'repo.git')]);
+      target.native(['config', 'http.receivepack', 'true']); target.native(['config', 'receive.shallowUpdate', 'true']); target.native(['config', 'gc.auto', '0']);
+      imported = true; current = name;
+      return { id: name, name, description: null, defaultBranch: branch, remote: target.remote, token: 'initial-fixture-token' };
     }),
     get: vi.fn(async () => { if (!imported) throw Object.assign(new Error('Import pending'), { code: 'NOT_FOUND' }); return repo; }),
     // One Git server stands in for every repository name; a name no longer imported is gone already.
