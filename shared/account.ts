@@ -1,3 +1,4 @@
+import type { RepositoryCommit } from './history';
 export type OrganizationRole = 'owner' | 'member';
 /** An empty email means no verified email is available. Old sessions predate usernames; account responses always include username and avatarUrl. */
 export interface AccountIdentity { id: string; email: string; name: string; username?: string | null; avatarUrl?: string | null }
@@ -19,7 +20,9 @@ export interface RepositoryAddress {
   mirror?: { source: string; syncedAt: string | null; importing: boolean; claimable: boolean; /** Server reservation time for the first copy, including preparation. */ startedAt?: string };
 }
 /** Public repositories, newest activity first, for the landing page and Explore (`GET /api/repos`). */
-export interface RepositoryListing { owner: { slug: string; name: string }; repo: { slug: string; name: string }; description?: string; updatedAt: string }
+/** What Explore shows of a public repository beside its name: its latest commit and, for a GitHub mirror, the picture its maintainers chose, its stars, forks, topics and language. */
+export interface RepositoryShowcase { latest?: RepositoryCommit; cover?: string; avatar?: string; stars?: number; forks?: number; topics?: string[]; language?: string }
+export interface RepositoryListing { owner: { slug: string; name: string; avatar?: boolean }; repo: { slug: string; name: string }; description?: string; updatedAt: string; showcase?: RepositoryShowcase }
 export interface Account { user: AccountIdentity | null; provider: 'github' | 'access' | 'owner-key'; organizations: Organization[]; personalOwner?: Organization | null; usernameSuggestion?: string | null; signupEnabled: boolean; methods: { github: boolean; email: boolean; passkeys: boolean } }
 /** Every repository owner available to the person, with their personal space first. */
 export function accountOwners(account: Account | null): Organization[] {

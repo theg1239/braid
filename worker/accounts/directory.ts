@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { AccountIdentity, RepositoryWorkspace, Organization, OrganizationInvite, OrganizationMember, OrganizationRole, OwnerKind, Visibility, RepositoryAddress, OrganizationTeam, TeamRole, TeamDetail, RepositoryPermission, RepositoryAccess, NotificationKind, NotificationPreferences } from '../../shared/account';
+import type { AccountIdentity, RepositoryWorkspace, Organization, OrganizationInvite, OrganizationMember, OrganizationRole, OwnerKind, Visibility, RepositoryAddress, OrganizationTeam, TeamRole, TeamDetail, RepositoryPermission, RepositoryAccess, NotificationKind, NotificationPreferences, RepositoryShowcase } from '../../shared/account';
 import type { OwnerRepositories } from '../../shared/owners';
 import type { ProvenanceOwner } from '../../shared/types';
 import { githubLogin } from '../../shared/people';
@@ -64,9 +64,12 @@ const heldByOther = (holder: AddressOwner | undefined, proof: ClaimProof, userId
 const linkProof = (proof: ClaimProof): ClaimProof => !proof.claimable || proof.kind === 'organization' ? { ...proof, link: true }
   : { claimable: false, link: true, reason: 'Only a GitHub organization can be linked to a Braid organization.' };
 
+const SHOWCASE_MS = 6 * 3_600_000;
+
 export class Directory extends DurableObject<BraidEnv> {
   private mirrorCreations = new Map<string, Promise<void>>();
   private mirrorTouches = new Map<string, number>();
+  private showcaseTouches = new Map<string, number>();
   private claimingOwners = new Set<string>();
   constructor(ctx: DurableObjectState, env: BraidEnv) {
     super(ctx, env);
@@ -512,6 +515,7 @@ export class Directory extends DurableObject<BraidEnv> {
       addColumn(sql, 'workspaces', 'github_private', 'INTEGER');
       addColumn(sql, 'workspaces', 'has_commits', 'INTEGER');
       addColumn(sql, 'workspaces', 'public_read_until', 'INTEGER NOT NULL DEFAULT 0');
+      addColumn(sql, 'workspaces', 'showcase', 'TEXT');
       for (const team of sql.exec<{ id: string; name: string }>('SELECT id, name FROM teams WHERE slug IS NULL ORDER BY created_at, id').toArray())
         sql.exec('UPDATE teams SET slug = ? WHERE id = ?', this.uniqueSlug(team.name), team.id);
       for (const repo of sql.exec<{ id: string; team_id: string; name: string }>('SELECT id, team_id, name FROM workspaces WHERE slug IS NULL ORDER BY created_at, id').toArray())
@@ -591,6 +595,20 @@ export class Directory extends DurableObject<BraidEnv> {
     if (row) this.audit(row.teamId, 'Braid security', action, target);
   }
 
+  /** A read refreshes Explore's view of a public repository at most every six hours, mirrors included, whose syncs need a signed-in visitor. */
+  private touchShowcase(teamId: string, workspaceId: string, github?: string) {
+    if ((this.showcaseTouches.get(workspaceId) ?? 0) > Date.now()) return;
+    if (this.showcaseTouches.size >= 1000) this.showcaseTouches.delete(this.showcaseTouches.keys().next().value!);
+    this.showcaseTouches.set(workspaceId, Date.now() + SHOWCASE_MS);
+    const key = repositoryKey(teamId, workspaceId);
+    // Started apart from the read, so a failure here never fails it.
+    this.ctx.waitUntil(Promise.resolve().then(() => this.env.WORKSPACES.getByName(key).refreshShowcase(key, github)).catch(error => logFailure('showcase_refresh_failed', error, { workspaceId })));
+  }
+  /** Explore's view of a repository, merged so a later sync without GitHub's answer keeps what it had. */
+  repositoryShowcase(workspaceId: string, showcase: RepositoryShowcase) {
+    const row = this.ctx.storage.sql.exec<{ showcase: string | null }>('SELECT showcase FROM workspaces WHERE id = ?', workspaceId).toArray()[0];
+    if (row) this.ctx.storage.sql.exec('UPDATE workspaces SET showcase = ? WHERE id = ?', JSON.stringify({ ...(row.showcase ? JSON.parse(row.showcase) as RepositoryShowcase : {}), ...showcase }), workspaceId);
+  }
   /** Activity comes from durable workspace/change writes, never from visitors reading a repository. */
   repositoryActivity(workspaceId: string, updatedAt: string, description?: string) {
     this.ctx.storage.sql.exec('UPDATE workspaces SET updated_at = MAX(updated_at, ?), description = COALESCE(?, description), search_description = COALESCE(?, search_description) WHERE id = ?', updatedAt, description ?? null, description === undefined ? null : searchText(description), workspaceId);
@@ -609,6 +627,7 @@ export class Directory extends DurableObject<BraidEnv> {
     const { visibility } = this.ctx.storage.sql.exec<{ visibility: Visibility }>('SELECT visibility FROM workspaces WHERE id = ?', row.workspaceId).one();
     const role = userId ? this.memberRole(userId, row.teamId) : undefined;
     if (hidden(visibility, !!role, mirror)) return repositoryNotFound();
+    if (visibility === 'public' && !mirror?.private) this.touchShowcase(row.teamId, row.workspaceId, mirror?.fullName);
     return { ok: true, data: { workspaceId: row.workspaceId, owner: { slug: row.ownerSlug, name: row.ownerName, kind: row.ownerKind }, repo: { slug: row.slug, name: row.name }, visibility, canWrite: !!role && this.repositoryWriter(userId!, row.teamId, row.workspaceId, role),
       // The reservation precedes background setup and remains available while an edge snapshot has no import record.
       ...(mirror ? { mirror: { source: `https://github.com/${mirror.fullName}`, syncedAt: mirror.syncedAt, importing: !!mirror.importing, claimable: false,
@@ -632,10 +651,11 @@ export class Directory extends DurableObject<BraidEnv> {
       ? ' AND (w.search_name, w.id) > (?, ?)'
       : ' AND (w.updated_at, w.id) < (?, ?)';
     const order = sort === 'name' ? 'w.search_name, w.id' : 'w.updated_at DESC, w.id DESC';
-    const rows = sql.exec<{ id: string; ownerSlug: string; ownerName: string; slug: string; name: string; searchName: string; description: string | null; updatedAt: string }>(`SELECT w.id, t.slug AS ownerSlug, t.name AS ownerName, w.slug, w.name, w.search_name AS searchName, w.description, w.updated_at AS updatedAt ${from}${after} ORDER BY ${order} LIMIT ?`,
+    const rows = sql.exec<{ id: string; ownerSlug: string; ownerName: string; slug: string; name: string; searchName: string; description: string | null; updatedAt: string; showcase: string | null; avatar: number | null }>(`SELECT w.id, t.slug AS ownerSlug, t.name AS ownerName, w.slug, w.name, w.search_name AS searchName, w.description, w.updated_at AS updatedAt, w.showcase, COALESCE(t.github_namespace_id, (SELECT github_id FROM users WHERE id = t.user_id)) AS avatar ${from}${after} ORDER BY ${order} LIMIT ?`,
       ...bindings, ...(cursor ? cursor.sort === 'name' ? [cursor.name, cursor.id] : [cursor.updatedAt, cursor.id] : []), limit + 1).toArray();
     const page = rows.slice(0, limit), last = page.at(-1);
-    return { items: page.map(row => ({ owner: { slug: row.ownerSlug, name: row.ownerName }, repo: { slug: row.slug, name: row.name }, ...(row.description ? { description: row.description } : {}), updatedAt: row.updatedAt })),
+    return { items: page.map(row => ({ owner: { slug: row.ownerSlug, name: row.ownerName, ...(row.avatar !== null ? { avatar: true } : {}) }, repo: { slug: row.slug, name: row.name }, ...(row.description ? { description: row.description } : {}), updatedAt: row.updatedAt,
+      ...(row.showcase ? { showcase: JSON.parse(row.showcase) as RepositoryShowcase } : {}) })),
       nextCursor: rows.length > limit && last ? encodeCursor({ updatedAt: last.updatedAt, id: last.id, ...(sort === 'name' ? { sort, name: last.searchName } : {}) }) : null,
       ...(q ? { total: sql.exec<{ total: number }>(`SELECT COUNT(*) AS total ${from}`, ...bindings).one().total } : {}) };
   }
@@ -718,7 +738,7 @@ export class Directory extends DurableObject<BraidEnv> {
     });
   }
   avatar(slug: string): number | null {
-    return this.ctx.storage.sql.exec<{ id: number | null }>("SELECT u.github_id AS id FROM users u JOIN teams t ON t.user_id = u.id JOIN team_addresses a ON a.team_id = t.id WHERE a.slug = ? COLLATE NOCASE AND t.kind = 'user'", slug).toArray()[0]?.id ?? null;
+    return this.ctx.storage.sql.exec<{ id: number | null }>('SELECT COALESCE(t.github_namespace_id, u.github_id) AS id FROM teams t JOIN team_addresses a ON a.team_id = t.id LEFT JOIN users u ON u.id = t.user_id WHERE a.slug = ? COLLATE NOCASE', slug).toArray()[0]?.id ?? null;
   }
   personalOwner(userId: string): Organization | null {
     const row = this.ctx.storage.sql.exec<{ id: string; name: string; slug: string }>("SELECT id, name, slug FROM teams WHERE kind = 'user' AND user_id = ?", userId).toArray()[0];

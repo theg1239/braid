@@ -8,6 +8,8 @@ import { textDiffStats } from '../../shared/diff';
 import { DurableObject } from 'cloudflare:workers';
 import type { Activity, Agent, AgentFailureStage, Capabilities, Change, ChangeComment, ChangeStatus, PullRequestContext, ContextItem, EvidenceInput, FileChange, Mission, Project, ProjectImport, ProvenanceOwner, WorkspaceSnapshot } from '../../shared/types';
 import { artifactsOf, directoryOf, securityOf, type BraidEnv } from '../env';
+import { githubShowcase } from '../github/showcase';
+import { historyCommits } from '../repositories/history';
 import type { AgentSandbox } from '../agents/sandbox';
 import type { HostedProvider } from '../agents/providers';
 import { RequestJournal, type Receipt } from '../http/operations';
@@ -235,11 +237,28 @@ export class Workspace extends DurableObject<BraidEnv> {
       await this.publishActivity();
     }
   }
+  /** Asked by the Directory when a public repository is read and its view is stale. */
+  async refreshShowcase(key: string, github?: string) { this.repositoryKey ??= key; await this.publishShowcase(github); }
+  /** Explore's view of this repository: its latest commit by who made it and, for a GitHub mirror, what GitHub shows of it. */
+  private async publishShowcase(mirror?: string) {
+    const workspaceId = repositoryParts(this.repositoryKey)?.workspaceId, head = this.data.project.head;
+    if (!workspaceId || !head || !this.data.project.id) return;
+    try {
+      const published = await this.ctx.storage.get<string>('showcase-head');
+      using repo = await artifactsOf(this.env).get(this.data.project.id);
+      const [latest] = published === head ? [] : await historyCommits(repo, await repo.log({ ref: head, limit: 1 }));
+      const github = mirror ? await githubShowcase(mirror) : {};
+      if (!latest && !Object.keys(github).length) return;
+      await directoryOf(this.env).repositoryShowcase(workspaceId, { ...(latest ? { latest } : {}), ...github });
+      if (latest) await this.ctx.storage.put('showcase-head', head);
+    } catch (error) { logFailure('showcase_failed', error, { workspaceId }); }
+  }
   private async publishActivity() {
     const pending = await this.ctx.storage.get<{ workspaceId: string; updatedAt: string; description: string }>('directory-activity');
     if (!pending || !this.env.DIRECTORY) return;
     try {
       await directoryOf(this.env).repositoryActivity(pending.workspaceId, pending.updatedAt, pending.description);
+      this.ctx.waitUntil(this.publishShowcase());
       const current = await this.ctx.storage.get<typeof pending>('directory-activity');
       if (current?.updatedAt === pending.updatedAt) await this.ctx.storage.delete('directory-activity');
     } catch (error) {
@@ -1025,6 +1044,7 @@ export class Workspace extends DurableObject<BraidEnv> {
         } finally { await repo.revokeToken(token).catch(() => { /* The sync token expires after fifteen minutes. */ }); }
       }
       await directoryOf(this.env).mirrorUpdated(mirror.workspaceId, { syncedAt: now(), branch: source.branch, head: source.head });
+      this.ctx.waitUntil(this.publishShowcase(mirror.fullName));
       const key = this.repositoryKey!;
       await trunkOf(this.env, key).mirrored(key, source.branch, source.head).catch(error => logFailure('trunk_mirrored_failed', error));
       // A mirror imported before history was copied in parts copies the rest once; a copy left waiting resumes.
@@ -1423,7 +1443,10 @@ export class Workspace extends DurableObject<BraidEnv> {
       catch (error) { logFailure('import_token_cleanup_failed', error, { repository: name }); }
     })());
     await this.ctx.storage.delete('pending-project');
-    if (pending.mirror) await directoryOf(this.env).mirrorUpdated(pending.mirror.workspaceId, { importing: false, syncedAt: now(), branch: this.data.project.branch, head });
+    if (pending.mirror) {
+      await directoryOf(this.env).mirrorUpdated(pending.mirror.workspaceId, { importing: false, syncedAt: now(), branch: this.data.project.branch, head });
+      this.ctx.waitUntil(this.publishShowcase(pending.mirror.fullName));
+    }
     if (pending.replaces) {
       await this.ctx.storage.delete('history-copy');
       await artifactsOf(this.env).delete(pending.replaces).catch(error => logFailure('mirror_old_copy_cleanup_failed', error, { repository: pending.replaces }));
@@ -2473,7 +2496,7 @@ export class Workspace extends DurableObject<BraidEnv> {
     }
     if (this.creating) throw new HttpError(409, 'Repository setup is already running. Retry connect.');
     if (github) {
-      const response = await fetch(`https://api.github.com/repos/${github.owner}/${github.repo}`, { headers: { 'user-agent': 'Braid', accept: 'application/vnd.github+json' }, redirect: 'error', signal: AbortSignal.timeout(15_000) });
+      const response = await fetch(`https://api.github.com/repos/${github.owner}/${github.repo}`, { headers: { 'user-agent': 'Braid', accept: 'application/vnd.github+json' }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
       if (response.ok) {
         const source = parseFrom(agentPublicSource, await response.json(), 'GitHub returned invalid repository metadata.');
         if (!source.private && !source.disabled) {
