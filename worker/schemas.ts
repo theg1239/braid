@@ -14,6 +14,11 @@ import { blockedStrings, instructionPaths, instructionText, INSTRUCTIONS_PATH } 
 import type { VerifyJob } from './agents/runner';
 import { activityCommand, activityRelativePath, safeActivityIdentity } from '../shared/activity-privacy';
 
+const MEDIA_ADDRESS = 'Name the media by its https address.';
+export const mediaAddress = v.pipe(v.string(MEDIA_ADDRESS), v.maxLength(8192, MEDIA_ADDRESS), v.url(MEDIA_ADDRESS),
+  v.transform(value => new URL(value)),
+  v.check(value => value.protocol === 'https:' && !value.username && !value.password, MEDIA_ADDRESS));
+
 /* ---------- page cursors ---------- */
 
 /** A page cursor: JSON in UTF-8, as base64. Clients pass it back unread, and `cursor` parses it. */

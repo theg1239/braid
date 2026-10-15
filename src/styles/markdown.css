@@ -91,12 +91,42 @@
   text-underline-offset: 3px;
 }
 
-.md__image {
-  padding: 0 6px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 5px;
-  color: var(--fg-2);
-  font-size: 13px;
+/* Images and videos keep their written width up to the column, as GitHub shows them. */
+.md__img {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+.md__img--left {
+  float: left;
+  margin: 0 16px 8px 0;
+}
+
+.md__img--right {
+  float: right;
+  margin: 0 0 8px 16px;
+}
+
+/* A badge in a link is the link: no underline beneath the picture. */
+.md__link:has(> .md__img) {
+  text-decoration: none;
+}
+
+.md__video {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-2, #000);
+}
+
+.md__html::after {
+  content: '';
+  display: block;
+  clear: both;
 }
 
 .md__code-inline {

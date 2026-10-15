@@ -144,11 +144,12 @@ describe('public repository reads at the edge', () => {
     expect(keysOf(kept)).toHaveLength(2);
   });
 
-  it('leaves downloads and anything but a listing or file to the repository', async () => {
+  it('leaves downloads, README media and anything but a listing or file to the repository', async () => {
     const kept = edgeCache(), f = fixture();
     for (let index = 0; index < 2; index++) await f.call('/api/repository?ref=&path=README.md&download=1');
+    for (let index = 0; index < 2; index++) await f.call('/api/repository?ref=&path=logo.svg&media=1');
     await f.call('/api/state');
-    expect(f.reads.map(read => read.path)).toEqual(['/api/repository', '/api/repository', '/api/state']);
+    expect(f.reads.map(read => read.path)).toEqual(['/api/repository', '/api/repository', '/api/repository', '/api/repository', '/api/state']);
     expect(keysOf(kept)).toEqual([]);
   });
 });

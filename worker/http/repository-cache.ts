@@ -14,7 +14,7 @@ const COMMIT = /^[0-9a-f]{40}$/;
 /** Marks an entry a public read was answered with, after its commit was found published. */
 const PUBLISHED = 'x-braid-published';
 export function repositoryRead(url: URL, method: string): boolean {
-  return method === 'GET' && REPOSITORY_READS.has(url.pathname) && !url.searchParams.has('download');
+  return method === 'GET' && REPOSITORY_READS.has(url.pathname) && !url.searchParams.has('download') && !url.searchParams.has('media');
 }
 /*
  * A public read names a branch, read strictly as `refs/heads/` or `refs/tags/`, or a commit its repository checks is

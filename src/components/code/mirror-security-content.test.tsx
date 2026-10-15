@@ -5,6 +5,7 @@ import { Markdown } from './markdown';
 
 vi.mock('../../lib/router', () => ({ useRoute: () => ({ hash: '' }), paths: { code: (path: string) => `/code?path=${encodeURIComponent(path)}` } }));
 vi.mock('../ui/Link', () => ({ RouterLink: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a> }));
+vi.mock('../../lib/api', () => ({ workspaceScopeNow: () => 'w1' }));
 
 it.each([
   '<script>alert(1)</script>', '<svg onload="alert(1)"></svg>', '<iframe srcdoc="<script>alert(1)</script>"></iframe>',
@@ -14,7 +15,10 @@ it.each([
   '![track](https://attacker.invalid/track)',
 ])('keeps mirrored content inert: %s', source => {
   const html = renderToStaticMarkup(<Markdown source={source} path="README.md" />);
-  expect(html).not.toMatch(/<(?:script|svg|iframe|img|object|embed)\b|\son(?:load|error|click)=/i);
+  expect(html).not.toMatch(/<(?:script|svg|iframe|object|embed)\b|\son(?:load|error|click)=/i);
+  // Images load only from Braid: a tracking pixel never sees the reader's browser.
+  const sources = [...html.matchAll(/\s(?:src|poster|srcset)="([^"]*)"/g)].map(match => match[1]);
+  expect(sources.every(source => source.startsWith('/api/media?url=') || source.startsWith('/api/repository?'))).toBe(true);
   const targets = [...html.matchAll(/href="([^"]*)"/g)].map(match => match[1]);
   expect(targets.every(target => target.startsWith('/code?') || target.startsWith('#') || /^https?:\/\//.test(target))).toBe(true);
 });

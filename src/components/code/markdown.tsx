@@ -1,17 +1,20 @@
 import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { Lexer, type Token, type Tokens } from 'marked';
 import { RouterLink } from '../ui/Link';
-import { useCodeHref } from './branch';
+import { useBranch, useCodeHref } from './branch';
+import { renderHtml, tokenize, type Piece, type Resolvers } from './markdown-html';
 import '../../styles/markdown.css';
 import { dirname } from '../../lib/format';
 import { useRoute } from '../../lib/router';
+import { workspaceScopeNow } from '../../lib/api';
 
 /*
- * Markdown as GitHub shows a README, from marked's tokens straight to React elements. No HTML
- * ever reaches the page: raw HTML tokens are dropped, text stays text, and a link keeps only an
- * http(s), same-page or relative target. Relative targets open the file in Braid; an image is
- * a link to its source, since the page's CSP allows no remote images. This module loads only
- * when a Markdown file is on screen.
+ * Markdown as GitHub shows a README, from marked's tokens straight to React elements. Markup never
+ * reaches the page as markup: a README's HTML is rebuilt from an allowlist (markdown-html.tsx), text
+ * stays text, and a link keeps only an http(s), same-page or relative target. Relative targets open
+ * the file in Braid. Images and videos show inline: a repository file loads through Braid at the
+ * commit being read, and remote sources load through Braid's media proxy. This module loads only when
+ * a Markdown file is on screen.
  */
 
 type Inline = Tokens.Text | Tokens.Escape | Tokens.Link | Tokens.Image | Tokens.Strong | Tokens.Em | Tokens.Codespan | Tokens.Br | Tokens.Del | Tokens.HTML | Tokens.Tag;
@@ -35,6 +38,72 @@ function resolveHref(href: string, path: string, codeHref: ReturnType<typeof use
   }
 }
 
+/**
+ * Where an image or a video in `path` loads from: a repository file through Braid at the commit being read, a remote
+ * file through Braid's media proxy (http is asked for over https), so the reader's browser contacts no other host, or
+ * a data image as written; null for anything else.
+ */
+function mediaSource(src: string, path: string, branch: ReturnType<typeof useBranch>, image: boolean): string | null {
+  const target = src.trim();
+  if (!target || target.startsWith('//')) return null;
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(target)?.[1].toLowerCase();
+  if (scheme === 'https' || scheme === 'http') return `/api/media?${new URLSearchParams({ url: scheme === 'http' ? `https:${target.slice(5)}` : target })}`;
+  if (scheme === 'data') return image && /^data:image\/(png|gif|jpe?g|webp|avif|svg\+xml)[;,]/i.test(target) ? target : null;
+  if (scheme) return null;
+  try {
+    const resolved = new URL(target, `file:///${dirname(path)}`);
+    const file = decodeURIComponent(resolved.pathname.replace(/^\/+/, ''));
+    if (!file) return null;
+    const scope = workspaceScopeNow(), ref = branch.gitRef || (branch.main ? '' : branch.name);
+    return `/api/repository?${new URLSearchParams({ ...(scope ? { workspace: scope } : {}), ...(ref ? { ref } : {}), path: file, media: '1' })}`;
+  } catch {
+    return null;
+  }
+}
+
+/** GitHub shows an uploaded video, or a link to a video file, standing alone on its line as a player. */
+function videoLink(href: string): boolean {
+  if (/^https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]{36}$/i.test(href)) return true;
+  try { return /\.(mp4|m4v|webm|mov|ogv)$/i.test(new URL(href, 'file:///').pathname); } catch { return false; }
+}
+
+const IMAGE_ALIGN = new Set(['left', 'right']);
+function MdImage({ src, alt, title, width, height, align, path }: { src: string; alt: string; title?: string | null; width?: string; height?: string; align?: string; path: string }) {
+  const source = mediaSource(src, path, useBranch(), true);
+  if (!source) return <>{alt}</>;
+  const side = align && IMAGE_ALIGN.has(align.toLowerCase()) ? ` md__img--${align.toLowerCase()}` : '';
+  return <img className={`md__img${side}`} src={source} alt={alt} title={title ?? undefined} width={width} height={height} loading="lazy" decoding="async" referrerPolicy="no-referrer" />;
+}
+
+function MdVideo({ sources, poster, width, height, path }: { sources: string[]; poster?: string; width?: string; height?: string; path: string }) {
+  const branch = useBranch();
+  const loaded = sources.map(src => mediaSource(src, path, branch, false)).filter((src): src is string => !!src);
+  if (!loaded.length) return null;
+  const still = poster ? mediaSource(poster, path, branch, true) ?? undefined : undefined;
+  return (
+    <video className="md__video" controls muted playsInline preload="metadata" poster={still} width={width} height={height}>
+      {loaded.map(src => <source key={src} src={src} />)}
+      Your browser cannot play this video.
+    </video>
+  );
+}
+
+function HtmlAnchor({ href, path, children }: { href: string; path: string; children: ReactNode }) {
+  const target = resolveHref(href, path, useCodeHref());
+  if (!target) return <>{children}</>;
+  if (target.kind === 'app') return <RouterLink href={target.to} className="md__link">{children}</RouterLink>;
+  return target.kind === 'external'
+    ? <a href={target.to} target="_blank" rel="noreferrer noopener" className="md__link">{children}</a>
+    : <a href={target.to} className="md__link">{children}</a>;
+}
+
+/** How a README's HTML in `path` resolves its links, images and videos. */
+const resolvers = (path: string): Resolvers => ({
+  anchor: (href, children, key) => <HtmlAnchor key={key} href={href} path={path}>{children}</HtmlAnchor>,
+  image: (src, attrs, key) => <MdImage key={key} src={src} path={path} {...attrs} />,
+  video: (sources, attrs, key) => <MdVideo key={key} sources={sources} path={path} {...attrs} />,
+});
+
 function slug(text: string, seen: Map<string, number>): string {
   const base = text.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-') || 'section';
   const count = seen.get(base) ?? 0;
@@ -46,10 +115,10 @@ function plain(tokens: Token[]): string {
   return tokens.map((token) => ('tokens' in token && token.tokens ? plain(token.tokens) : 'text' in token ? String(token.text) : '')).join('');
 }
 
-function Link({ token, path, children, image = false }: { token: Tokens.Link | Tokens.Image; path: string; children: ReactNode; image?: boolean }) {
+function Link({ token, path, children }: { token: Tokens.Link; path: string; children: ReactNode }) {
   const codeHref = useCodeHref();
   const target = resolveHref(token.href, path, codeHref);
-  const className = image ? 'md__link md__image' : 'md__link';
+  const className = 'md__link';
   if (!target) return <>{children}</>;
   if (target.kind === 'external') {
     return (
@@ -73,6 +142,11 @@ function Link({ token, path, children, image = false }: { token: Tokens.Link | T
 }
 
 function renderInline(tokens: Token[] | undefined, path: string): ReactNode {
+  // Inline tags, such as a badge's <a><img></a>, open and close around other tokens: they are read together.
+  if ((tokens ?? []).some(token => token.type === 'html')) {
+    const pieces: Piece[] = (tokens ?? []).flatMap((token): Piece[] => token.type === 'html' ? tokenize((token as Tokens.HTML).text) : [{ kind: 'node', node: renderInline([token], path) }]);
+    return renderHtml(pieces, resolvers(path));
+  }
   return (tokens ?? []).map((raw, index) => {
     const token = raw as Inline;
     switch (token.type) {
@@ -101,9 +175,8 @@ function renderInline(tokens: Token[] | undefined, path: string): ReactNode {
           </Link>
         );
       case 'image':
-        return <Link key={index} token={token} path={path} image>{token.text || 'Image'}</Link>;
+        return <MdImage key={index} src={token.href} alt={token.text} title={token.title} path={path} />;
       default:
-        // Raw HTML is never rendered.
         return null;
     }
   });
@@ -142,8 +215,14 @@ function renderBlocks(tokens: Token[], path: string, ids: Map<string, number>): 
           </Tag>
         );
       }
-      case 'paragraph':
+      case 'paragraph': {
+        const inline = (token as Tokens.Paragraph).tokens.filter(part => !(part.type === 'text' && !part.raw.trim()));
+        const only = inline.length === 1 && inline[0].type === 'link' ? inline[0] as Tokens.Link : null;
+        if (only && only.text === only.href && videoLink(only.href)) return <MdVideo key={index} sources={[only.href]} path={path} />;
         return <p key={index}>{renderInline((token as Tokens.Paragraph).tokens, path)}</p>;
+      }
+      case 'html':
+        return <div key={index} className="md__html">{renderHtml(tokenize((token as Tokens.HTML).text), resolvers(path))}</div>;
       case 'text':
         return <p key={index}>{renderInline((token as Tokens.Text).tokens, path)}</p>;
       case 'code':
@@ -197,7 +276,7 @@ function renderBlocks(tokens: Token[], path: string, ids: Map<string, number>): 
       case 'hr':
         return <hr key={index} />;
       default:
-        // Blank space, link definitions and raw HTML blocks render nothing.
+        // Blank space and link definitions render nothing.
         return null;
     }
   });

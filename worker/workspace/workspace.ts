@@ -75,6 +75,9 @@ function settlesWithin(promise: Promise<unknown>, ms: number): Promise<boolean> 
   let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([promise.then(() => true, () => true), new Promise<boolean>(done => { timer = setTimeout(() => done(false), ms); })]).finally(() => clearTimeout(timer));
 }
+/** The files a README may show inline, by extension, as GitHub serves them; anything else is never served as media. */
+const MEDIA_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml',
+  ico: 'image/x-icon', bmp: 'image/bmp', mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', ogv: 'video/ogg' };
 const IMPORT_ERRORS: Partial<Record<ArtifactsErrorCode, string>> = {
   INVALID_URL: 'That URL does not point to a Git repository. Use its main repository URL.',
   INVALID_INPUT: 'That repository URL could not be imported. Check the URL and try again.',
@@ -778,7 +781,24 @@ export class Workspace extends DurableObject<BraidEnv> {
         if (url.searchParams.get('download') === '1') return new Response(content, { headers: { ...headers, 'content-type': 'application/octet-stream', 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filepath.split('/').at(-1)!)}`, 'x-content-type-options': 'nosniff' } });
         return Response.json({ content, path: filepath, ref: tree.ref }, { headers });
       }
+      const media = url.searchParams.get('media') === '1' ? MEDIA_TYPES[filepath.split('.').at(-1)!.toLowerCase()] : undefined;
+      if (url.searchParams.get('media') === '1' && !media) throw new HttpError(415, 'Only images and videos are shown inline.');
       if (this.data.project.id) return this.readObjects(ref, timings, async (reader, ref, open) => {
+        if (media) {
+          // An image or a video a README shows. The sandbox keeps an SVG opened on its own from running as this site.
+          const entry = await repositoryEntry(reader, ref, filepath);
+          if (entry.kind !== 'file') throw new HttpError(404, 'File not found.');
+          let blob: Blob | null;
+          try { blob = await (await open()).readBlob(entry.hash); }
+          catch (error) {
+            if (!artifactsFailed(error, 'MEMORY_LIMIT')) throw error;
+            throw new HttpError(413, 'This file is too large to show inline. Download it instead.');
+          }
+          if (!blob) throw new HttpError(404, 'File not found.');
+          return new Response(blob.stream(), { headers: { 'content-type': media, 'content-length': String(blob.size), 'content-disposition': 'inline',
+            'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox", 'x-content-type-options': 'nosniff',
+            'cache-control': /^[0-9a-f]{40}$/.test(ref) ? 'public, max-age=31536000, immutable' : 'public, max-age=300' } });
+        }
         if (url.searchParams.get('download') !== '1') return Response.json(await timings.wait('file', fileAt(reader, ref, filepath)), { headers: { 'x-braid-ref': ref } });
         // A download streams the blob from Artifacts whole, however large, instead of keeping a copy.
         const entry = await repositoryEntry(reader, ref, filepath);

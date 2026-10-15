@@ -331,6 +331,15 @@ Owners authorize the App and select an installation and repository. Braid checks
 
 The import bridge accepts only upload-pack and streams GitHub data directly to Artifacts. It uses a token scoped to one repository and rechecks current access. Redirects are refused. GitHub credentials never enter browser responses, Artifacts metadata, or agent containers.
 
+### README media
+
+A README shows images, SVGs and videos as GitHub does. `src/components/code/markdown-html.tsx` reads the README's HTML with a small tokenizer and rebuilds only allowed elements and attributes as React elements. It drops scripts, styles, frames, forms and event attributes.
+
+- A repository file loads from `/api/repository?media=1` at the commit being read.
+- A remote file loads through `/api/media`. The page's content security policy allows images and media only from Braid, so no host that a README names sees the reader.
+- Both answers have the policy `default-src 'none'; sandbox`, so an SVG that is opened alone cannot run as Braid.
+- A `<picture>` shows its dark-scheme source. A link to an uploaded GitHub video on a line of its own becomes a player.
+
 ### Tree reads
 
 The browser reads the actual Git tree at a pinned commit, one directory at a time. Hidden paths, lockfiles, binaries, symlinks, and gitlinks remain visible. Pagination and inline limits affect display only.

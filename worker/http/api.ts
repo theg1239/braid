@@ -1,4 +1,5 @@
 import { directoryOf, securityOf, type BraidEnv } from '../env';
+import { mediaProxy } from './media-proxy';
 import { assertOrigin, cookie, cookies, digest, equalSecret, jsonBody, SESSION_MS, sessionToken, validSession } from './auth';
 import { accessIdentity, type Identity } from './access';
 import { errorAnswer, HttpError, logFailure, unwrap } from '../errors';
@@ -57,7 +58,9 @@ function headers(response: Response, request: Request, requestId: string) {
   // Pages and static files are normally served without the Worker, with these headers from public/_headers.
   // API answers are never cached, except content-addressed evidence images, which say so themselves.
   if (pathname.startsWith('/api/') && !response.headers.has('cache-control')) result.headers.set('cache-control', 'no-store');
-  else if (protocol === 'https:') result.headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+  // Media keeps its own sandbox policy: an SVG opened directly must not run as this site. Remote media reaches the page
+  // only through /api/media, so the browser contacts no other host.
+  else if (protocol === 'https:' && !response.headers.has('content-security-policy')) result.headers.set('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
   return result;
 }
 
@@ -220,7 +223,8 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
   const git = GIT_PATH.exec(url.pathname);
   if (/^\/git\/demo\.git(?:\/|$)/.test(url.pathname)) throw new HttpError(404, 'Repository not found.');
   if (git) request = gitRequest(request, parse(workspaceSelection, git[1]));
-  const requestedWorkspace = request.headers.get('x-braid-workspace') ?? (['GET', 'HEAD'].includes(request.method) && EVIDENCE_IMAGE.test(url.pathname) ? url.searchParams.get('workspace') : null);
+  // An <img> or <video> cannot send headers, so evidence images and a README's media name the repository in the address.
+  const requestedWorkspace = request.headers.get('x-braid-workspace') ?? (['GET', 'HEAD'].includes(request.method) && (EVIDENCE_IMAGE.test(url.pathname) || url.pathname === '/api/repository' && url.searchParams.get('media') === '1') ? url.searchParams.get('workspace') : null);
   const guide = request.method === 'GET' ? setupGuide(url.pathname, env.PUBLIC_ORIGIN || url.origin, url.searchParams) : null;
   if (guide) return guideResponse(request, guide, env.PUBLIC_ORIGIN || url.origin, env.BUILD_ID ?? 'dev');
   if (url.pathname === '/mcp') return mcp(request, env, url);
@@ -256,6 +260,7 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
     if (!budget.allowed) return Response.json({ error: 'Too many requests. Try again shortly.' }, { status: 429, headers: { 'retry-after': String(budget.retryAfter) } });
   }
   if (githubImport) return githubImportTransport(request, env);
+  if (url.pathname === '/api/media') return mediaProxy(request);
   const anonymousBudget = async () => {
     const allowed = env.ANONYMOUS_LIMITER ? (await env.ANONYMOUS_LIMITER.limit({ key: network })).success : (await security.consume(`public:${network}`, 300, 60_000)).allowed;
     if (!allowed) throw new HttpError(429, 'Too many requests. Try again shortly.');
@@ -542,7 +547,8 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
     }
   }
   let response = new Response(result.body, result);
-  if (live && EVIDENCE_IMAGE.test(url.pathname)) response.headers.set('cache-control', 'private, no-store');
+  // Repository visibility and membership can change after this read, even when its commit cannot.
+  if (live && (EVIDENCE_IMAGE.test(url.pathname) || url.pathname === '/api/repository' && url.searchParams.get('media') === '1')) response.headers.set('cache-control', 'private, no-store');
   if (url.pathname === '/api/state' && result.ok) {
     const snapshot = await response.json() as { capabilities: Record<string, unknown> };
     Object.assign(snapshot.capabilities, viewer);
