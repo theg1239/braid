@@ -169,7 +169,7 @@ describe('guide MCP contracts', () => {
       const response = await api.fetch(new Request(`${origin}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method }) }), {} as BraidEnv);
       expect(response.status).toBe(200);
       const answer = await response.json() as { result: { tools?: unknown[]; serverInfo?: { name: string } } };
-      if (method === 'tools/list') expect(answer.result.tools).toHaveLength(18);
+      if (method === 'tools/list') expect(answer.result.tools).toHaveLength(19);
       else expect(answer.result.serverInfo?.name).toBe('braid');
     }
   });

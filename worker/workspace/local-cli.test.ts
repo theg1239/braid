@@ -1725,3 +1725,10 @@ describe('proof attached with --proof', { timeout: 30_000 }, () => {
     });
   });
 });
+
+it('reuses a saved account connection for each selected repository', () => {
+  const environment = { BRAID_CONFIG_HOME: join(root, 'config') };
+  cli.saveCredentials(origin, { accessToken, workspaceId: '*', expiresAt: new Date(Date.now() + 60_000).toISOString() }, environment);
+  expect(cli.loadCredentials(origin, environment, { workspaceId: 'workspace-one' })).toEqual({ accessToken, workspaceId: 'workspace-one' });
+  expect(cli.loadCredentials(origin, environment, { workspaceId: 'workspace-two' })).toEqual({ accessToken, workspaceId: 'workspace-two' });
+});

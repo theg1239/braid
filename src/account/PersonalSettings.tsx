@@ -6,7 +6,7 @@ import { Row, Section, SettingsEmpty } from '../components/settings/Section';
 import { Notifications } from '../components/settings/Notifications';
 import { paths } from '../lib/router';
 import { useDocumentTitle } from '../lib/title';
-import { AccountIdentity, Passkeys } from './AccountSettings';
+import { AccountIdentity, AccountAgentConnections, Passkeys } from './AccountSettings';
 import { useAccount } from './AccountProvider';
 import '../styles/settings.css';
 import '../styles/account.css';
@@ -23,6 +23,7 @@ export function PersonalSettings({ organizations = false }: { organizations?: bo
     </Section> : <>
       <Section id="account" title="Account" rows><AccountIdentity /></Section>
       {account?.methods.passkeys ? <Section id="passkeys" title="Passkeys" rows><Passkeys /></Section> : null}
+      <Section id="connections" title="Connected apps and agents" rows><AccountAgentConnections /></Section>
       <Notifications userId={account!.user!.id} />
     </>}</div>
   </div></SitePage>;

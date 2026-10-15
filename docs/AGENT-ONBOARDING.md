@@ -53,7 +53,7 @@ node braid.mjs blame <file>
 
 1. **GitHub CLI.** When `gh` is signed in to github.com, `connect` sends the token from `gh auth token` to Braid once. Braid reads the account by the rules of GitHub sign-in: the immutable GitHub ID, and the GitHub login as the username when it is free. Then Braid discards the token. It never keeps or logs it.
 2. **Email code.** Ask the person for their email address, and run `connect --email ADDRESS`. Braid emails a code that is valid for 10 minutes. Ask the person for the code, and run `connect --email ADDRESS --code CODE`. After 5 wrong codes, ask for a new one.
-3. **Approval link.** The person opens the link, signs in, selects a repository and approves. The request expires after 10 minutes. The approval can reduce the access to read. Only `connect --link` starts this browser flow.
+3. **Approval link.** The person opens the link, signs in, chooses account access or one repository and approves. The request expires after 10 minutes. The approval can reduce the access to read. Only `connect --link` starts this browser flow.
 
 - Run `connect` in the checkout. It infers the GitHub origin or directory name, reuses a writable matching repository, or creates a private repository in the person’s namespace. Public GitHub origins import automatically; other checkouts initialize the empty default branch from committed history with compare-and-swap. Uncommitted files remain local. Use `--repository OWNER/REPO` to override the choice. GitHub’s immutable account ID is sufficient: do not refresh gh email scopes or ask the person to create a repository in the browser. Email-code setup provisions the same way. Subsequent pushes always open changes with `refs/for/main`.
 - Run `connect` only with the Braid address that the person gave you, because the GitHub token goes to that address.
@@ -74,7 +74,7 @@ Add `$ORIGIN/mcp` to an MCP client with OAuth, for example Claude Code, Claude.a
 
 1. The client registers itself, or it names its client metadata document.
 2. The browser opens `/oauth/authorize`. The person signs in when necessary.
-3. The page shows the name of the client and where the browser returns. The person selects a repository and Read or Work access, and approves.
+3. The page shows the name of the client and where the browser returns. The person chooses account access or one repository, then Read or Work access, and approves.
 4. The client gets an access token for `/mcp` only. It lasts 1 hour. A refresh token renews it, and each refresh replaces the refresh token.
 
 The connection lasts 30 days after its last use. Settings › Agents shows it with the other connections, and the person can revoke it there. The [architecture](ARCHITECTURE.md#oauth-for-mcp-clients) gives the endpoints.

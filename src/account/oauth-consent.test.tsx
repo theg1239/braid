@@ -14,7 +14,7 @@ const team: Organization = { id: 'org', name: 'Acme', slug: 'acme', role: 'owner
 const repositories = team.workspaces.map(workspace => ({ team, workspace }));
 const loopback: OAuthRequestView = { client: { name: 'Claude Code', redirect: { kind: 'loopback', host: 'localhost' }, document: null }, scope: 'work' };
 async function render(view: OAuthRequestView | null, choices = repositories) {
-  const stream = await renderToReadableStream(<ConsentForm view={view} repositories={choices} remembered={null} onAnswer={async () => undefined} />);
+  const stream = await renderToReadableStream(<ConsentForm view={view} repositories={choices} onAnswer={async () => undefined} />);
   await stream.allReady;
   return new Response(stream).text();
 }
@@ -25,11 +25,11 @@ describe('the OAuth consent page', () => {
     const text = textOf(html);
     expect(html).toMatch(/<h1[^>]*>Authorize Claude Code<\/h1>/);
     expect(text).toContain('Returns to This computer (localhost)');
-    expect(text).toContain('Read this repository and open pull requests in it.');
+    expect(text).toContain('Read code and open pull requests within your permissions.');
     expect(text).toContain('It cannot approve or merge pull requests, or change who has access.');
     expect(text).toContain('Approve only if you started this sign-in on this computer.');
     expect(text).not.toContain('Published by');
-    expect(html).toContain('acme/relay');
+    expect(html).toContain('All repositories you can access');
     expect(text).toContain('Access Work Read');
   });
 
@@ -37,14 +37,15 @@ describe('the OAuth consent page', () => {
     const text = textOf(await render({ client: { name: 'VS Code', redirect: { kind: 'app', host: 'vscode' }, document: 'code.visualstudio.com' }, scope: 'read' }));
     expect(text).toContain('Returns to The vscode app');
     expect(text).toContain('Published by code.visualstudio.com');
-    expect(text).toContain('Read this repository.');
+    expect(text).toContain('Read code within your permissions.');
     expect(text).not.toContain('this computer');
     expect(text).not.toContain('Access Work');
   });
 
-  it('offers a new repository in another tab when the person has none, and keeps the layout while loading', async () => {
+  it('allows account authorization without a repository, and keeps the layout while loading', async () => {
     const empty = await render(loopback, []);
-    expect(empty).toMatch(/<a href="\/new"[^>]*target="_blank"[^>]*>.*?New repository<\/span><\/a>/);
+    expect(textOf(empty)).toContain('All repositories you can access');
+    expect(empty).not.toContain('disabled=""');
     const loading = await render(null);
     expect(loading).toMatch(/<h1[^>]*>Authorize a client<\/h1>/);
     expect(textOf(loading)).toContain('Returns to');

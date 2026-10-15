@@ -176,6 +176,10 @@ export function Passkeys() {
 /** Coding agents this person approved, each limited to one repository until it expires or is revoked. */
 export function AgentConnections() {
   const { scope } = useRepository();
+  return <AccountAgentConnections scope={scope ?? undefined} />;
+}
+
+export function AccountAgentConnections({ scope }: { scope?: string }) {
   const { account } = useAccount();
   const toasts = useKumoToastManager();
   const now = useNow();
@@ -185,7 +189,7 @@ export function AgentConnections() {
 
   const load = useCallback(async () => {
     try {
-      setConnections((await accountApi.connections()).filter(connection => connection.workspaceId === scope));
+      setConnections((await accountApi.connections()).filter(connection => (!scope || connection.workspaceId === scope || connection.workspaceId === '*')));
       setError(null);
     } catch (err) {
       setError(errorMessage(err));
@@ -203,7 +207,7 @@ export function AgentConnections() {
       {connections === null && !error ? <div className="settings-loading" aria-busy="true" aria-label="Loading connected agents"><SkeletonLine /></div> : null}
       {connections?.map(connection => {
         const expires = new Date(connection.expires).toISOString();
-        return <Row compact key={connection.id} label={<>{connection.label}{account?.user ? <span className="quiet"> for {account.user.username ? `@${account.user.username}` : account.user.name}</span> : null}</>} hint={<>{AGENT_SCOPE[connection.scope].label} · <time dateTime={expires}>{connection.expires > now ? `Expires ${absoluteTime(expires)}` : `Expired ${relativeTime(expires, now)}`}</time></>}>
+        return <Row compact key={connection.id} label={<>{connection.label}{account?.user ? <span className="quiet"> for {account.user.username ? `@${account.user.username}` : account.user.name}</span> : null}</>} hint={<>{AGENT_SCOPE[connection.scope].label} · {connection.workspaceId === '*' ? 'All repositories' : scope ? 'This repository' : 'Selected repository'} · <time dateTime={expires}>{connection.expires > now ? `Expires ${absoluteTime(expires)}` : `Expired ${relativeTime(expires, now)}`}</time></>}>
           <Button size="sm" variant="ghost" onClick={() => setRevoking(connection)}>Revoke</Button>
         </Row>;
       })}

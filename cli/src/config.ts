@@ -109,7 +109,7 @@ export function readPrivateJson<const S extends v.GenericSchema>(path: string, s
 const stored = v.object({
   origin: v.string(),
   accessToken: v.pipe(v.string(), v.regex(TOKEN)),
-  workspaceId: v.pipe(v.string(), v.regex(ID)),
+  workspaceId: v.union([v.pipe(v.string(), v.regex(ID)), v.literal('*')]),
   expiresAt: v.pipe(v.string(), v.check(value => Number.isFinite(Date.parse(value)))),
 });
 type StoredCredentials = v.InferOutput<typeof stored>;
@@ -169,11 +169,15 @@ export function loadCredentials(context: BraidContext, origin: string, workspace
     if (workspaces.length !== 1) fail('Set BRAID_WORKSPACE_ID together with BRAID_ACCESS_TOKEN.');
     return { origin, accessToken: env.BRAID_ACCESS_TOKEN, workspaceId: workspaces[0] };
   }
-  const saved = savedCredentials(env, origin).filter(record => !wanted || record.workspaceId === wanted);
+  const saved = savedCredentials(env, origin).filter(record => !wanted || record.workspaceId === wanted || record.workspaceId === '*');
   const current = saved.filter(record => Date.parse(record.expiresAt ?? '') > context.now());
-  const repositories = new Set(current.map(record => record.workspaceId));
+  const account = current.find(record => record.workspaceId === '*');
+  if (wanted && account && !current.some(record => record.workspaceId === wanted)) return { ...account, workspaceId: wanted };
+  const repositories = new Set(current.filter(record => record.workspaceId !== '*').map(record => record.workspaceId));
   if (repositories.size > 1) fail(`Several repositories are signed in at ${origin}. Run braid init in the repository, or set BRAID_WORKSPACE_ID.`);
-  if (current[0]) return current[0];
+  const selected = current.find(record => record.workspaceId !== '*');
+  if (selected) return selected;
+  if (account) return fail('Account connected. Choose a repository with --workspace or BRAID_WORKSPACE_ID.');
   return fail(saved.length ? `Your Braid approval for ${origin} expired. Run braid login again.` : `Not signed in to ${origin}. Run braid login${wanted ? '' : ` --url ${origin}`}.`);
 }
 

@@ -600,7 +600,7 @@ const CONSENT = 'Approve or deny the authorization request.';
 export const oauthConsent = body({
   request: v.record(v.string(), v.pipe(v.string(), v.maxLength(2048)), CONSENT),
   decision: v.picklist(['approve', 'deny'], CONSENT),
-  workspaceId: v.optional(workspaceSelection),
+  workspaceId: v.optional(v.union([workspaceSelection, v.literal('*')])),
   scope: v.optional(v.picklist(['read', 'work'], 'Choose read or work access.')),
 }, CONSENT);
 const redirectUris = (max: number) => v.pipe(v.array(v.pipe(v.string(), v.maxLength(2048))), v.minLength(1), v.maxLength(max));

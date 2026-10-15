@@ -3724,7 +3724,7 @@ function readPrivateJson(path, schema, { max = 1048576, readOnly = false, label 
 const stored = /* @__PURE__ */ object({
 	origin: /* @__PURE__ */ string(),
 	accessToken: /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ regex(TOKEN)),
-	workspaceId: /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ regex(ID)),
+	workspaceId: /* @__PURE__ */ union([/* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ regex(ID)), /* @__PURE__ */ literal("*")]),
 	expiresAt: /* @__PURE__ */ pipe(/* @__PURE__ */ string(), /* @__PURE__ */ check((value) => Number.isFinite(Date.parse(value))))
 });
 function saveCredentials(env, grant) {
@@ -3792,10 +3792,17 @@ function loadCredentials(context, origin, workspaceId) {
 			workspaceId: workspaces[0]
 		};
 	}
-	const saved = savedCredentials(env, origin).filter((record) => !wanted || record.workspaceId === wanted);
+	const saved = savedCredentials(env, origin).filter((record) => !wanted || record.workspaceId === wanted || record.workspaceId === "*");
 	const current = saved.filter((record) => Date.parse(record.expiresAt ?? "") > context.now());
-	if (new Set(current.map((record) => record.workspaceId)).size > 1) fail(`Several repositories are signed in at ${origin}. Run braid init in the repository, or set BRAID_WORKSPACE_ID.`);
-	if (current[0]) return current[0];
+	const account = current.find((record) => record.workspaceId === "*");
+	if (wanted && account && !current.some((record) => record.workspaceId === wanted)) return {
+		...account,
+		workspaceId: wanted
+	};
+	if (new Set(current.filter((record) => record.workspaceId !== "*").map((record) => record.workspaceId)).size > 1) fail(`Several repositories are signed in at ${origin}. Run braid init in the repository, or set BRAID_WORKSPACE_ID.`);
+	const selected = current.find((record) => record.workspaceId !== "*");
+	if (selected) return selected;
+	if (account) return fail("Account connected. Choose a repository with --workspace or BRAID_WORKSPACE_ID.");
 	return fail(saved.length ? `Your Braid approval for ${origin} expired. Run braid login again.` : `Not signed in to ${origin}. Run braid login${wanted ? "" : ` --url ${origin}`}.`);
 }
 const emailFlow = /* @__PURE__ */ object({
@@ -3878,7 +3885,7 @@ const grant = /* @__PURE__ */ object({
 	accessToken: token,
 	tokenType: /* @__PURE__ */ literal("Bearer"),
 	expiresAt: time,
-	workspaceId: id,
+	workspaceId: /* @__PURE__ */ union([id, /* @__PURE__ */ literal("*")]),
 	scope: /* @__PURE__ */ picklist([
 		"read",
 		"setup",
@@ -6406,7 +6413,7 @@ function keep(context, origin, approved, wanted) {
 		workspaceId: approved.workspaceId,
 		expiresAt: approved.expiresAt
 	});
-	if (wanted && approved.workspaceId !== wanted) fail(`The owner approved repository ${approved.workspaceId}, but ${wanted} is required. That approval was saved; run braid login again and choose ${wanted}.`);
+	if (wanted && approved.workspaceId !== "*" && approved.workspaceId !== wanted) fail(`The owner approved repository ${approved.workspaceId}, but ${wanted} is required. That approval was saved; run braid login again and choose ${wanted}.`);
 	return approved;
 }
 async function deviceLogin(context, origin, wanted) {
@@ -6592,7 +6599,7 @@ async function login(flags) {
 	const approved = flags.email !== void 0 ? await emailLogin(this, origin, flags.email, flags.code, wanted) : await agentLogin(this, origin, wanted, flags.link);
 	if (!approved) return;
 	if (here) startActivityUpload(this, here.root);
-	print(this, `Signed in to ${origin} for repository ${approved.workspaceId} until ${day(approved.expiresAt)}.${here && !here.link ? " Run braid init to link this repository." : ""}`);
+	print(this, `Signed in to ${origin} for ${approved.workspaceId === "*" ? "your account" : `repository ${approved.workspaceId}`} until ${day(approved.expiresAt)}.${here && !here.link ? " Run braid init to link this repository." : ""}`);
 }
 async function logout(flags) {
 	const origin = resolveOrigin(this, findRepository(this)?.link, flags.url);

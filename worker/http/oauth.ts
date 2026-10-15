@@ -1,3 +1,4 @@
+import { ACCOUNT_ACCESS } from '../../shared/types';
 import * as v from 'valibot';
 import { base64url } from 'jose';
 import type { AccountIdentity } from '../../shared/account';
@@ -183,8 +184,8 @@ export async function oauthConsentRoute(request: Request, env: BraidEnv, url: UR
   if (!answer.workspaceId) throw new HttpError(400, 'Choose a repository.');
   const scope = answer.scope ?? checked.scope;
   if (scope === 'work' && checked.scope === 'read') throw new HttpError(400, 'Approve the requested access or reduce it to read.');
-  // As with an approval link: only a person who can write a repository lets an agent into it.
-  unwrap(await directoryOf(env).access(user, answer.workspaceId, true));
+  // A restricted grant must be within current membership. Account grants recheck each selected repository.
+  if (answer.workspaceId !== ACCOUNT_ACCESS) unwrap(await directoryOf(env).access(user, answer.workspaceId, scope !== 'read'));
   const code = `${CODE_PREFIX}${random()}`;
   await securityOf(env).issueOAuthCode(await digest(code), { clientId: checked.client.id, redirectUri: checked.redirectUri, challenge: checked.challenge, resource: origins.resource,
     scope, user, workspaceId: answer.workspaceId, label: checked.client.name.slice(0, 60), refresh: checked.client.refresh });
@@ -280,7 +281,7 @@ async function token(request: Request, env: BraidEnv, origins: Origins, ip: stri
     const redeemed = await security.redeemOAuthCode(await digest(body.code), { clientId: client.id, redirectUri: body.redirect_uri, challenge: await s256(body.code_verifier),
       ...(body.resource === undefined ? {} : { resource: origins.resource }) }, { id: crypto.randomUUID(), refresh: await digest(refresh) });
     if (!redeemed.ok) return oauthError(400, 'invalid_grant', 'The code is invalid, expired or used, or it was issued for another client, redirect or verifier.');
-    const allowed = await directory.access(redeemed.grant.user, redeemed.grant.workspaceId, redeemed.grant.scope !== 'read');
+    const allowed = redeemed.grant.workspaceId === ACCOUNT_ACCESS ? { ok: true as const, data: { teamId: '' } } : await directory.access(redeemed.grant.user, redeemed.grant.workspaceId, redeemed.grant.scope !== 'read');
     if (!allowed.ok) { await security.revokeAgent(redeemed.grant.user.id, redeemed.grant.id); return oauthError(400, 'invalid_grant', 'The person who approved no longer has access to the repository.'); }
     return issueTokens(env, origins, redeemed.grant, allowed.data.teamId, redeemed.grant.scope as OAuthScope, redeemed.refresh ? refresh : null);
   }
@@ -291,7 +292,7 @@ async function token(request: Request, env: BraidEnv, origins: Origins, ip: stri
   const grant = rotated.grant;
   // A refresh may narrow the access, never widen it.
   if (grant.scope === 'read' && scopes.includes('work')) return oauthError(400, 'invalid_scope', 'This authorization allows read only.');
-  const allowed = await directory.access(grant.user, grant.workspaceId, grant.scope !== 'read');
+  const allowed = grant.workspaceId === ACCOUNT_ACCESS ? { ok: true as const, data: { teamId: '' } } : await directory.access(grant.user, grant.workspaceId, grant.scope !== 'read');
   if (!allowed.ok) { await security.revokeAgent(grant.user.id, grant.id); return oauthError(400, 'invalid_grant', 'The person who approved no longer has access to the repository.'); }
   return issueTokens(env, origins, grant, allowed.data.teamId, scopes.length && !scopes.includes('work') ? 'read' : grant.scope as OAuthScope, refresh);
 }

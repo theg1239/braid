@@ -40,7 +40,7 @@ export const deviceRequest = v.object({
   interval: v.pipe(v.number(), v.minValue(1)),
 });
 export const grant = v.object({
-  accessToken: token, tokenType: v.literal('Bearer'), expiresAt: time, workspaceId: id,
+  accessToken: token, tokenType: v.literal('Bearer'), expiresAt: time, workspaceId: v.union([id, v.literal('*')]),
   scope: v.picklist(['read', 'setup', 'work', 'fleet']),
 });
 /** A connection for the person's own proof also names its repository by address. */

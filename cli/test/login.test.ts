@@ -148,3 +148,15 @@ describe('braid login for a person new to Braid', () => {
     expect((await braid(['login', '--url', origin, '--code', 'ABCD2345'], { cwd: home, env, ...clock() })).stderr).toContain('--code goes with the --email');
   });
 });
+
+it('saves an account approval once and uses it for different selected repositories', async () => {
+  const { loadCredentials } = await import('../src/config');
+  const home = temporary(), env = environment(home), time = clock();
+  const braidServer = server({ 'POST /api/agent/requests': request, 'POST /api/agent/token': () => json({ accessToken: CONNECTION, tokenType: 'Bearer', expiresAt: '2026-10-15T12:00:00.000Z', workspaceId: '*', scope: 'work' }) });
+  const result = await braid(['login', '--url', origin, '--link', '--workspace', 'ws_1'], { cwd: home, env, fetch: braidServer.fetch, ...time });
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout).toContain('for your account');
+  const context = { env, now: time.now } as Parameters<typeof loadCredentials>[0];
+  expect(loadCredentials(context, origin, 'ws_1')).toMatchObject({ accessToken: CONNECTION, workspaceId: 'ws_1' });
+  expect(loadCredentials(context, origin, 'ws_2')).toMatchObject({ accessToken: CONNECTION, workspaceId: 'ws_2' });
+});

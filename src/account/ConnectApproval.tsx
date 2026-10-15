@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { Banner, Button, Radio, Select, SkeletonLine, useKumoToastManager } from '@cloudflare/kumo';
 import { CheckCircleIcon, ProhibitIcon } from '@phosphor-icons/react';
 import { accountOwners } from '../../shared/account';
-import { paths } from '../lib/router';
-import { RouterLink } from '../components/ui/Link';
+import { ACCOUNT_ACCESS } from '../../shared/types';
 import { ApiError, errorMessage } from '../lib/api';
 import { plural } from '../lib/format';
 import { useNow } from '../lib/hooks';
@@ -26,16 +25,17 @@ const GONE = 'This request expired or was already handled. Start the connection 
  * what they could do, and nothing is granted until the person presses Approve.
  */
 export function ConnectApproval() {
-  const { account, remembered, pendingConnect, settleConnect } = useAccount();
+  const { account, pendingConnect, settleConnect } = useAccount();
   const toasts = useKumoToastManager();
   const now = useNow(5_000);
   const code = pendingConnect ?? '';
   const [stage, setStage] = useState<Stage>({ kind: 'loading' });
   const [busy, setBusy] = useState<'approve' | 'deny' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const owned = accountOwners(account).flatMap((team) => team.workspaces.filter(workspace => team.role === 'owner' || workspace.canWrite).map((workspace) => ({ team, workspace })));
-  const [workspaceId, setWorkspaceId] = useState(() => owned.find((o) => o.workspace.id === remembered)?.workspace.id ?? owned[0]?.workspace.id ?? '');
   const [grant, setGrant] = useState<AgentScope>('read');
+  const owned = accountOwners(account).flatMap((team) => team.workspaces.filter(workspace => grant === 'read' || team.role === 'owner' || workspace.canWrite).map((workspace) => ({ team, workspace })));
+  const [picked, setPicked] = useState<string>(ACCOUNT_ACCESS);
+  const workspaceId = owned.some((o) => o.workspace.id === picked) ? picked : ACCOUNT_ACCESS;
 
   useEffect(() => {
     let cancelled = false;
@@ -53,8 +53,6 @@ export function ConnectApproval() {
       cancelled = true;
     };
   }, [code]);
-
-  if (!owned.length) return <GateLayout title="Create a repository"><RouterLink href={paths.newRepository()}>New repository</RouterLink></GateLayout>;
 
   const decide = async (approve: boolean) => {
     if (stage.kind !== 'ready' || busy) return;
@@ -82,7 +80,7 @@ export function ConnectApproval() {
       <GateLayout title="Agent connected">
         <p className="connect__done">
           <CheckCircleIcon size={18} weight="fill" aria-hidden="true" />
-          {stage.label} can now use the repository you selected.
+          {stage.label} can now use {workspaceId === ACCOUNT_ACCESS ? 'your account' : 'the repository you selected'}.
         </p>
         <Button variant="primary" className="gate__wide" onClick={settleConnect}>
           Open Braid
@@ -111,13 +109,13 @@ export function ConnectApproval() {
         <dd className="mono connect__code">{formatConnectCode(code)}</dd>
         <dt>Agent</dt>
         <dd>{request ? request.label : <SkeletonLine className="connect__skeleton" />}</dd>
-        <dt>Repository</dt>
+        <dt>Repositories</dt>
         <dd>
           <Select
-            aria-label="Repository"
+            aria-label="Repositories"
             value={workspaceId}
-            onValueChange={(value) => value && setWorkspaceId(String(value))}
-            items={owned.map(({ team, workspace }) => ({ value: workspace.id, label: `${team.name} / ${workspace.name}` }))}
+            onValueChange={(value) => value && setPicked(String(value))}
+            items={[{ value: ACCOUNT_ACCESS, label: 'All repositories you can access' }, ...owned.map(({ team, workspace }) => ({ value: workspace.id, label: `${team.name} / ${workspace.name}` }))]}
           />
         </dd>
       </dl>
@@ -146,7 +144,7 @@ export function ConnectApproval() {
         <Button variant="secondary" loading={busy === 'deny'} disabled={!request || (!!busy && busy !== 'deny')} onClick={() => void decide(false)}>
           Deny
         </Button>
-        <Button variant="primary" loading={busy === 'approve'} disabled={!request || !workspaceId || expired || (!!busy && busy !== 'approve')} onClick={() => void decide(true)}>
+        <Button variant="primary" loading={busy === 'approve'} disabled={!request || expired || (!!busy && busy !== 'approve')} onClick={() => void decide(true)}>
           Approve
         </Button>
       </div>

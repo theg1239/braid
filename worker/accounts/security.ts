@@ -293,7 +293,7 @@ export class Security extends DurableObject<BraidEnv> {
       this.retireGrant(grant.id, grant.expires);
       this.ctx.storage.sql.exec("INSERT INTO security_audit (action, target, workspace_id, created_at) VALUES ('agent.secret-revoked', ?, ?, ?)", grant.id, grant.workspaceId, now());
     });
-    if (this.env.DIRECTORY) await directoryOf(this.env).repositorySecurityEvent(grant.workspaceId, 'agent.secret-revoked', grant.id);
+    if (this.env.DIRECTORY && grant.workspaceId !== '*') await directoryOf(this.env).repositorySecurityEvent(grant.workspaceId, 'agent.secret-revoked', grant.id);
     return { id: grant.id, workspaceId: grant.workspaceId };
   }
   /*

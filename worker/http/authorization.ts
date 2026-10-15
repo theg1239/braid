@@ -21,7 +21,7 @@ export async function checkAuthorization(env: BraidEnv, authorization?: Authoriz
   if (result.data.teamId !== authorization.teamId) throw new HttpError(403, 'Repository authorization does not match.');
   if (!lookup) return;
   const grant = await lookup;
-  if (!grant || grant.scope === 'read' || grant.workspaceId !== authorization.workspaceId || grant.user.id !== authorization.user.id)
+  if (!grant || grant.scope === 'read' || (grant.workspaceId !== '*' && grant.workspaceId !== authorization.workspaceId) || grant.user.id !== authorization.user.id)
     throw new HttpError(403, 'The agent connection was revoked or expired. Reconnect before submitting.');
   return grant;
 }

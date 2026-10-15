@@ -1,3 +1,4 @@
+import { ACCOUNT_ACCESS } from '../../shared/types';
 import { digest, jsonBody, shortCode } from './auth';
 import { ACCESS_PREFIX, verifyAccess, type AccessClaims } from './agent-token';
 import { HttpError, unwrap } from '../errors';
@@ -36,7 +37,7 @@ export const publicPathAllowed = (path: string, method: string) => ['GET', 'HEAD
 );
 export const agentPathAllowed = (path: string, method: string, scope: AgentScope) => {
   if (method === 'GET' && path === '/api/repository/search') return true;
-  if (method === 'GET' && path === '/api/search') return true;
+  if (method === 'GET' && ['/api/search', '/api/agent/repositories'].includes(path)) return true;
   if (method === 'GET' && (path === '/api/repository/commits' || path === '/api/repository/tree/commits')) return true;
   if (method === 'GET' && ['/api/repository/commit', '/api/repository/commit/diff'].includes(path)) return true;
   if (path === '/api/agent/session' && method === 'POST') return true;
@@ -182,7 +183,7 @@ export async function agentAuthorization(request: Request, env: BraidEnv, ip: st
     }
     const grant = JSON.parse(result.grant) as AgentGrant;
     const directory = directoryOf(env);
-    const allowed = await directory.access(grant.user, grant.workspaceId, grant.scope !== 'read');
+    const allowed = grant.workspaceId === ACCOUNT_ACCESS ? { ok: true as const } : await directory.access(grant.user, grant.workspaceId, grant.scope !== 'read');
     if (!allowed.ok) throw new HttpError(403, 'The approving owner no longer has repository access. Ask a current repository owner to approve a new connection; see /auth.md.');
     const token = connectionToken();
     await security.issueAgent(await digest(token), grant);
@@ -202,7 +203,7 @@ export async function agentAuthorization(request: Request, env: BraidEnv, ip: st
   if (request.method !== 'POST') throw new HttpError(405, 'Use POST to approve this agent request.');
   const { workspaceId, scope } = parse(agentApproval, await jsonBody(request));
   if (scope !== 'read' && scope !== pending.scope) throw new HttpError(400, 'Approve the requested permission or reduce it to read-only.');
-  unwrap(await directoryOf(env).access(user, workspaceId, true));
+  if (workspaceId !== ACCOUNT_ACCESS) unwrap(await directoryOf(env).access(user, workspaceId, scope !== 'read'));
   const grant: AgentGrant = { id: crypto.randomUUID(), user, workspaceId, scope, label: pending.label, expires: Date.now() + connectionLifetime(scope) };
   if (!await security.approveDevice(match[1], grant)) throw new HttpError(409, 'This agent request changed. Return to the agent and request a new approval link.');
   return Response.json({ ok: true });

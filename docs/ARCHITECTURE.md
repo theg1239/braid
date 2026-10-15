@@ -291,12 +291,12 @@ Braid is the OAuth 2.1 authorization server for its own MCP endpoint, as the [MC
 - A redirect must match a registered address exactly. A loopback redirect can use any port (RFC 8252). HTTPS, loopback HTTP and app schemes are allowed. The consent page shows where the browser returns, and it warns about a loopback redirect.
 - A bad client or redirect shows an error, and Braid does not redirect. Other problems return to the client with `error` and `iss`.
 - Codes last 5 minutes and work once. A second use revokes the grant from the first use.
-- An approval is an agent grant for one repository, as a device approval is. The person must be able to write the repository. The grant lasts 30 days after its last refresh.
+- OAuth and device approvals default to account access, with an optional repository restriction. Account grants use `workspaceId: '*'`; existing repository grants retain their original restriction. Read grants require read membership, and other scopes require write access to act on a repository. The grant lasts 30 days after its last refresh.
 - An access token lasts 1 hour. Its own signing key and its `aud` claim bind it to `/mcp`, so the rest of the API refuses it. For each tool call, `/mcp` changes it into a 5-minute agent token of the same grant. The gateway then checks membership, revocation and scope, as for other agents.
 - A read token that calls a write tool gets HTTP 403 with `error="insufficient_scope"`.
 - Each refresh issues a new refresh token. The token before it stays valid until the client uses the new one, so a client can retry after a lost answer. A retired token, or a token from another client, revokes the grant.
 - Security keeps clients, codes and refresh tokens only as SHA-256 digests. Settings › Agents lists the grant. Its revocation ends all of its tokens.
-- A grant names one repository. Braid has no grant for all the repositories of a person, so every check stays the same as for an approved connection.
+- An account grant follows current membership on every request. MCP clients call `list_repositories` and pass `repository` (an owner/repo address or workspace ID) to each tool. The API uses `X-Braid-Workspace`; `/api/agent/session` mints a token restricted to the chosen repository. Scope limits and revocation still apply account-wide.
 
 ## Repository imports and browsing
 

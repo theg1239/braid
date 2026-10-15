@@ -21,8 +21,7 @@ export function ConnectAgentPopover({ open, onOpenChange, anchor }: { open: bool
         ) : method === 'mcp' ? (
           <div className="agent-connect__body">
             <InlineCopyText labels={{ copyAction: 'Copy MCP endpoint', copied: 'Copied' }}>{mcpEndpoint()}</InlineCopyText>
-            <McpHeaders workspaceId={workspace?.id} />
-            <a className="text-link" href="/auth.md" target="_blank" rel="noreferrer">Get an access token</a>
+            <details><summary>Manual connection</summary><McpHeaders workspaceId={workspace?.id} /></details>
           </div>
         ) : (
           <div className="agent-connect__body">

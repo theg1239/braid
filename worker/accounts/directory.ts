@@ -896,9 +896,9 @@ export class Directory extends DurableObject<BraidEnv> {
     return teams.map(team => ({ ...team, workspaces: this.workspaces(team.id).filter(workspace => !this.mirrorRecord(workspace.id)).map(workspace => ({ ...workspace, canWrite: this.repositoryWriter(user.id, team.id, workspace.id, team.role) })) }));
   }
   /** The repositories this person can write, personal first, as an agent that connects for them may name them. */
-  writableRepositories(user: AccountIdentity): { workspaceId: string; address: string }[] {
+  writableRepositories(user: AccountIdentity, writableOnly = true): { workspaceId: string; address: string }[] {
     const personal = this.personalOwner(user.id);
-    return [...(personal ? [personal] : []), ...this.list(user)].flatMap(owner => owner.workspaces.filter(workspace => workspace.canWrite)
+    return [...(personal ? [personal] : []), ...this.list(user)].flatMap(owner => owner.workspaces.filter(workspace => !writableOnly || workspace.canWrite)
       .map(workspace => ({ workspaceId: workspace.id, address: `${owner.slug}/${workspace.slug}` })));
   }
   private workspaces(teamId: string): RepositoryWorkspace[] {

@@ -1,3 +1,4 @@
+import { ACCOUNT_ACCESS } from '../../shared/types';
 import { directoryOf, securityOf, type BraidEnv } from '../env';
 import { mediaProxy } from './media-proxy';
 import { assertOrigin, cookie, cookies, digest, equalSecret, jsonBody, SESSION_MS, sessionToken, validSession } from './auth';
@@ -101,9 +102,9 @@ async function mcp(request: Request, env: BraidEnv, url: URL): Promise<Response>
   if (credential && !credential.ok) return refuse(401, credential.description, 'invalid_token');
   const forward = ['x-braid-workspace', 'cf-connecting-ip'].flatMap(name => { const value = request.headers.get(name); return value ? [[name, value] as [string, string]] : []; });
   if (credential) forward.push(['authorization', credential.authorization]);
-  const api: ApiCall = async (method, path, body, key) => {
+  const api: ApiCall = async (method, path, body, key, workspace) => {
     const response = await route(new Request(new URL(path, url.origin), { method, body: body === undefined ? undefined : JSON.stringify(body),
-      headers: { ...Object.fromEntries(forward), origin: url.origin, ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(key ? { 'idempotency-key': key } : {}) } }), env);
+      headers: { ...Object.fromEntries(forward), ...(workspace ? { 'x-braid-workspace': workspace } : {}), origin: url.origin, ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(key ? { 'idempotency-key': key } : {}) } }), env);
     return { status: response.status, data: await response.json().catch(() => null) };
   };
   try {
@@ -216,7 +217,7 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
     const parsed = v.safeParse(repositoryAddress, { owner: addressed[1], repo: addressed[2] });
     const credential = await agentCredential(env, basicPassword(request.headers.get('authorization')));
     const found = parsed.success ? await directoryOf(env).resolveRepository(credential?.user.id ?? null, parsed.output.owner, parsed.output.repo) : null;
-    if (!found?.ok || found.data.visibility !== 'public' && found.data.workspaceId !== credential?.workspace) throw new HttpError(404, 'Repository not found.');
+    if (!found?.ok || found.data.visibility !== 'public' && credential?.workspace !== ACCOUNT_ACCESS && found.data.workspaceId !== credential?.workspace) throw new HttpError(404, 'Repository not found.');
     // From here it is the repository's own Git path, with every check that path has.
     return route(new Request(new URL(`/git/${found.data.workspaceId}.git/${addressed[3]}${url.search}`, url), request), env, timings);
   }
@@ -321,7 +322,7 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
       if (credential.access) {
         const claims = credential.access;
         if ((!agentPathAllowed(url.pathname, request.method, claims.scope) && !agentAddressRead) || url.pathname.startsWith('/api/missions/')) throw new HttpError(403, 'Access tokens cover changes and reads; task checkouts use the agent connection itself.');
-        if (requestedWorkspace && requestedWorkspace !== claims.workspace) throw new HttpError(403, 'This access token belongs to a different repository.');
+        if (claims.workspace !== ACCOUNT_ACCESS && requestedWorkspace && requestedWorkspace !== claims.workspace) throw new HttpError(403, 'This access token belongs to a different repository.');
         agentScope = claims.scope;
         agentConnection = { id: claims.agent, digest: '', expires: claims.exp, label: claims.name, ...(claims.model ? { model: claims.model } : {}), ...(claims.fleet ? { fleet: claims.fleet } : {}) };
         owner = claims.owner ?? ownerOf(claims.user, null, await publicPerson(env, claims.user.id));
@@ -330,7 +331,10 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
         const { grant } = credential;
         // Exchanging a connection for a short-lived access token checks the grant and membership once.
         if (url.pathname === '/api/agent/session' && request.method === 'POST') {
-          const allowed = await directoryOf(env).access(grant.user, grant.workspaceId, grant.scope !== 'read');
+          const sessionWorkspace = grant.workspaceId === ACCOUNT_ACCESS ? requestedWorkspace : grant.workspaceId;
+          if (!sessionWorkspace) throw new HttpError(400, 'Choose a repository with X-Braid-Workspace.');
+          if (grant.workspaceId !== ACCOUNT_ACCESS && requestedWorkspace && requestedWorkspace !== grant.workspaceId) throw new HttpError(403, 'This connection belongs to a different repository.');
+          const allowed = await directoryOf(env).access(grant.user, sessionWorkspace, grant.scope !== 'read');
           if (!allowed.ok) throw new HttpError(403, 'The approving owner no longer has repository access.');
           const { name, model } = parse(agentSession, await jsonBody(request));
           let agent = { id: grant.id, name: grant.label || 'Connected agent' };
@@ -341,16 +345,20 @@ async function route(request: Request, env: BraidEnv, timings = new Timings(), e
           const exp = Math.min(grant.expires, Date.now() + ACCESS_LIFETIME);
           // The approving person owns every agent the connection mints, as GitHub knows them when Braid can tell.
           const owner = await personOwner(env, grant.user);
-          const accessToken = await mintAccess(env, { grant: grant.id, user: grant.user, workspace: grant.workspaceId, team: allowed.data.teamId,
+          const accessToken = await mintAccess(env, { grant: grant.id, user: grant.user, workspace: sessionWorkspace, team: allowed.data.teamId,
             scope: grant.scope === 'fleet' ? 'work' : grant.scope, agent: agent.id, name: agent.name, ...(model ? { model } : {}), owner, ...(grant.scope === 'fleet' ? { fleet: grant.label } : {}), exp });
-          return Response.json({ accessToken, tokenType: 'Bearer', expiresAt: new Date(exp).toISOString(), agent, workspaceId: grant.workspaceId });
+          return Response.json({ accessToken, tokenType: 'Bearer', expiresAt: new Date(exp).toISOString(), agent, workspaceId: sessionWorkspace });
         }
         agentScope = grant.scope;
         agentConnection = { id: grant.id, digest: credential.digest, expires: grant.expires, label: grant.label || 'Connected agent' };
         if (!agentPathAllowed(url.pathname, request.method, grant.scope) && !agentAddressRead) throw new HttpError(403, 'This agent connection cannot perform that operation.');
-        if (requestedWorkspace && requestedWorkspace !== grant.workspaceId) throw new HttpError(403, 'This agent connection belongs to a different repository.');
+        if (grant.workspaceId !== ACCOUNT_ACCESS && requestedWorkspace && requestedWorkspace !== grant.workspaceId) throw new HttpError(403, 'This agent connection belongs to a different repository.');
       }
-      agentWorkspace = credential.workspace; user = credential.user;
+      agentWorkspace = credential.workspace === ACCOUNT_ACCESS ? undefined : credential.workspace; user = credential.user;
+      if (url.pathname === '/api/agent/repositories' && request.method === 'GET') {
+        const repositories = await directoryOf(env).writableRepositories(user, agentScope !== 'read');
+        return Response.json({ repositories: repositories.filter(repo => !agentWorkspace || repo.workspaceId === agentWorkspace) });
+      }
     }
     if (url.pathname.startsWith('/api/agent/')) return agentAuthorization(request, env, ip, user);
     if (url.pathname === '/api/oauth/authorize') {

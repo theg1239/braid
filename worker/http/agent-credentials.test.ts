@@ -70,3 +70,9 @@ it('tells an agent which credential failed: an access token to renew, or a conne
   expect(await read('Bearer braid_at_forged.signature')).toEqual([401, renew]);
   for (const authorization of ['Bearer braid_agent_unknown', 'Bearer ghp_not-braid', basic(await f.connect(f.repo.id))]) expect(await read(authorization)).toEqual([401, replace]);
 });
+
+it('uses an account connection for private clones without weakening repository grants', async () => {
+  const f = await fixture(), token = await f.connect('*');
+  expect((await f.clone(f.address, basic(token))).status).toBe(200);
+  expect((await f.clone(`/git/${f.other.id}.git`, basic(token))).status).toBe(200);
+});

@@ -176,7 +176,7 @@ const configRoot = env => resolve(env.BRAID_CONFIG_HOME || join(env.XDG_CONFIG_H
 /** Approvals are saved per origin and repository. The origin-wide file of earlier releases is still read. */
 export function credentialFile(origin, env = process.env, workspaceId) {
   const root = configRoot(env), originKey = sha256(normalizeOrigin(origin));
-  return workspaceId === undefined ? join(root, `${originKey}.json`) : join(root, originKey, `${sha256(identifier(workspaceId))}.json`);
+  return workspaceId === undefined ? join(root, `${originKey}.json`) : join(root, originKey, `${sha256(workspaceId === '*' ? '*' : identifier(workspaceId))}.json`);
 }
 
 function tokenValue(value) {
@@ -186,7 +186,7 @@ function tokenValue(value) {
 
 export function saveCredentials(origin, grant, env = process.env) {
   origin = normalizeOrigin(origin);
-  const accessToken = tokenValue(grant.accessToken), workspaceId = identifier(grant.workspaceId);
+  const accessToken = tokenValue(grant.accessToken), workspaceId = grant.workspaceId === '*' ? '*' : identifier(grant.workspaceId);
   if (!Number.isFinite(Date.parse(grant.expiresAt)) || Date.parse(grant.expiresAt) <= Date.now()) fail('The approved credentials have expired. Reconnect to Braid.');
   const path = credentialFile(origin, env, workspaceId);
   privateDirectory(dirname(dirname(path)));
@@ -209,14 +209,14 @@ function savedCredentials(origin, env, readOnly, workspaceId) {
     let saved;
     try { saved = readJson(path, 32_768, { privateFile: true, readOnly }); } catch (error) { return error.code === 'ENOENT' ? undefined : unreadable(); }
     if (!object(saved) || saved.origin !== origin) fail('Stored credentials belong to a different Braid origin.');
-    if (typeof saved.workspaceId !== 'string' || !ID.test(saved.workspaceId)) fail('Stored credentials do not match their repository. Run connect again.');
+    if (typeof saved.workspaceId !== 'string' || saved.workspaceId !== '*' && !ID.test(saved.workspaceId)) fail('Stored credentials do not match their repository. Run connect again.');
     return { accessToken: saved.accessToken, workspaceId: saved.workspaceId, expires: Date.parse(saved.expiresAt) };
   };
   if (!present(dirname(legacy))) return records;
   const earlier = read(legacy);
-  if (earlier && (!workspaceId || earlier.workspaceId === workspaceId)) records.push(earlier);
+  if (earlier && (!workspaceId || earlier.workspaceId === workspaceId || earlier.workspaceId === '*')) records.push(earlier);
   if (!present(folder)) return records;
-  const names = workspaceId ? [`${sha256(workspaceId)}.json`] : readdirSync(folder).filter(name => /^[a-f0-9]{64}\.json$/.test(name)).sort();
+  const names = workspaceId ? [`${sha256(workspaceId)}.json`, `${sha256('*')}.json`] : readdirSync(folder).filter(name => /^[a-f0-9]{64}\.json$/.test(name)).sort();
   for (const name of names) {
     const record = read(join(folder, name));
     if (!record) continue;
@@ -243,6 +243,10 @@ export function loadCredentials(origin, env = process.env, { readOnly = false, w
   }
   const current = new Map();
   for (const record of saved) if (record.expires > Date.now() && !(current.get(record.workspaceId)?.expires >= record.expires)) current.set(record.workspaceId, record);
+  const account = current.get('*');
+  current.delete('*');
+  if (wanted && account && !current.size) return { accessToken: tokenValue(account.accessToken), workspaceId: wanted };
+  if (!wanted && account && !current.size) fail('Account connected. Choose a repository with --workspace or BRAID_WORKSPACE_ID.');
   if (current.size > 1) fail('Several repositories are connected to this Braid origin. Use the task link from Braid, which names its repository, or set BRAID_WORKSPACE_ID.');
   const [record] = current.values();
   if (!record) fail(saved.length ? 'Braid credentials expired. Run connect again.' : `Run connect --url ${origin}${wanted ? ` --workspace ${wanted}` : ''}, or set BRAID_ACCESS_TOKEN and BRAID_WORKSPACE_ID.`);
@@ -335,8 +339,8 @@ async function selfConnected(rt, origin, response, workspace) {
 function connected(rt, origin, grant, workspace) {
   if (grant.scope !== 'work' || grant.tokenType !== 'Bearer') fail('Work access is required. Run connect again.');
   saveCredentials(origin, grant, rt.env);
-  const approved = identifier(grant.workspaceId);
-  if (workspace && approved !== workspace) fail(`Braid connected repository ${approved}, but ${workspace} is required. That connection was saved for ${approved}; connect again for ${workspace}.`);
+  const approved = grant.workspaceId === '*' ? '*' : identifier(grant.workspaceId);
+  if (workspace && approved !== '*' && approved !== workspace) fail(`Braid connected repository ${approved}, but ${workspace} is required. That connection was saved for ${approved}; connect again for ${workspace}.`);
   const repository = typeof grant.repository === 'string' && /^[^/\s]+\/[^/\s]+$/.test(grant.repository) ? grant.repository : approved;
   if (grant.initialization) {
     const setup = grant.initialization;
@@ -350,7 +354,7 @@ function connected(rt, origin, grant, workspace) {
     }
   }
   rt.log(`${grant.created ? 'Created private repository' : 'Connected to'} ${origin}/${repository}.`);
-  return { workspaceId: approved };
+  return { workspaceId: approved === '*' && workspace ? workspace : approved };
 }
 async function sendEmailCode(rt, origin, email) {
   const response = await post(rt, `${origin}/api/agent/email/start`, JSON.stringify({ email, scope: 'work' }));
@@ -407,10 +411,10 @@ async function linkConnect(rt, origin, workspace) {
     const grant = await jsonResponse(poll);
     if (grant.scope !== 'work' || grant.tokenType !== 'Bearer') fail('Owner-approved work access is required. Run connect again.');
     saveCredentials(origin, grant, rt.env);
-    const approved = identifier(grant.workspaceId);
-    if (workspace && approved !== workspace) fail(`The owner approved repository ${approved}, but ${workspace} is required. That approval was saved for ${approved}; connect again and choose ${workspace} when approving.`);
-    rt.log(`Connected to ${origin} for repository ${approved}.`);
-    return { workspaceId: approved };
+    const approved = grant.workspaceId === '*' ? '*' : identifier(grant.workspaceId);
+    if (workspace && approved !== '*' && approved !== workspace) fail(`The owner approved repository ${approved}, but ${workspace} is required. That approval was saved for ${approved}; connect again and choose ${workspace} when approving.`);
+    rt.log(`Connected to ${origin} for ${approved === '*' ? 'your account' : `repository ${approved}`}.`);
+    return { workspaceId: approved === '*' && workspace ? workspace : approved };
   }
   fail('The authorization request expired. Run connect to try again.');
 }

@@ -12,7 +12,7 @@ Pull request and task responses include html_url, the browser link to give to th
 - [Complete a task](${origin}/local-agents.md): start from the person's task link. Get the person's new instructions with resume.
 - [Set up a repository](${origin}/setup.md).
 - [Braid skill](${origin}/skills/braid/SKILL.md): Claude Code: \`curl -o ~/.claude/skills/braid/SKILL.md --create-dirs ${origin}/skills/braid/SKILL.md\`; Codex (default skills directory): \`curl -o ~/.codex/skills/braid/SKILL.md --create-dirs ${origin}/skills/braid/SKILL.md\`.
-- [Connect an agent](${origin}/auth.md): sign the person up or in with the GitHub CLI, an email code, or OAuth in an MCP client. A connection is for one repository, and the person can revoke it.
+- [Connect an agent](${origin}/auth.md): sign the person up or in with the GitHub CLI, an email code, or OAuth in an MCP client. Browser approvals can cover the account or one repository, and the person can revoke them.
 - [Source (MIT)](${origin}/source/braid-source.zip): the full source of this deployment, with its tests.
 
 ## CLI
@@ -36,7 +36,7 @@ The tour is a recording. Read it with the header X-Braid-Workspace: demo, at GET
 
 Connect to ${origin}/mcp (streamable HTTP).
 
-- An MCP client with OAuth, such as Claude Code, Claude.ai, Cursor or VS Code, needs only this address. The person signs in, selects a repository and approves.
+- An MCP client with OAuth, such as Claude Code, Claude.ai, Cursor or VS Code, needs only this address. The person signs in, chooses account access or one repository and approves.
 - initialize and tools/list need no token. Read tools work on public repositories without a token.
 - Without a token, send X-Braid-Workspace with the repository ID, or with demo for the tour.
 - Writes, and reads of private repositories, need authorization. Read /auth.md for a token and /changes.md for the request format.
@@ -50,7 +50,7 @@ People show as @username. A repository is at /<username-or-organization>/<repo>.
 `;
   if (path === '/auth.md') return `# Agent authorization for Braid
 
-A connection lets an agent work for a person in one repository. You can get one in three ways. Each way also signs up a person who is new to Braid.
+A connection lets an agent act within the permissions a person approves. Browser approvals can cover all accessible repositories or just one. You can get one in three ways. Each way also signs up a person who is new to Braid.
 
 You need Node.js 22 or later and Git. Download ${origin}/cli/braid.mjs to ~/.braid/braid.mjs and run node ~/.braid/braid.mjs connect --url ${origin}. It asks for work access, and it tries the ways in this order:
 
@@ -64,7 +64,7 @@ The GitHub token or the email code stands in for the approval of the person. The
 
 ## MCP clients
 
-Add ${origin}/mcp to an MCP client that supports OAuth, for example Claude Code, Claude.ai, Cursor or VS Code. The client opens a page where the person signs in, selects a repository and approves read or work access. Access tokens last 1 hour, and the client refreshes them. The connection lasts 30 days after its last use. The person can revoke it in Settings › Agents of the repository.
+Add ${origin}/mcp to an MCP client that supports OAuth, for example Claude Code, Claude.ai, Cursor or VS Code. The client opens a page where the person signs in, chooses account access or one repository and approves read or work access. Access tokens last 1 hour, and the client refreshes them. Call list_repositories and pass repository (owner/repo or workspace ID) to repository tools. The connection lasts 30 days after its last use. The person can revoke it in Settings › Account › Connected apps and agents.
 
 ## A custom client
 
@@ -82,7 +82,7 @@ Both ways also accept "repository":"owner/repo". A 201 answer is the connection:
 With an approval link:
 
 1. POST /api/agent/requests with Content-Type: application/json and {"name":"GPT-6","scope":"work"}. Use the name of your model. Ask for setup to import a repository or create tasks, read to inspect, or fleet to make several work identities. Setup and work are separate permissions.
-2. Keep deviceCode private. Show verificationUri and userCode to the person. The person signs in and selects a repository under their username or an organization. Never approve your own request, and never ask for passwords. The approval can keep the requested scope or reduce it to read.
+2. Keep deviceCode private. Show verificationUri and userCode to the person. The person signs in and chooses account access or one repository. Never approve your own request, and never ask for passwords. The approval can keep the requested scope or reduce it to read.
 3. POST /api/agent/token with {"deviceCode":"the returned secret"}, not faster than interval (5 seconds). 202 means pending. On 429, wait for Retry-After. Stop on 410, or when expiresIn ends (10 minutes). Time alone never means approval.
 
 Then, for all three ways:
@@ -164,7 +164,7 @@ Without the GitHub CLI, ask the person for their email address, and run the firs
 - Run connect inside the checkout. It imports a public GitHub origin or initializes from local committed history into a private repository in the person’s namespace, and reconnect reuses it. Use --repository OWNER/REPO to override the inferred choice. No browser repository creation is needed.
 - connect --link shows an approval link instead. Show the link, and wait for the decision of the person.
 
-An MCP client with OAuth needs no CLI: add ${origin}/mcp, and the person approves one repository in the browser.
+An MCP client with OAuth needs no CLI: add ${origin}/mcp, and the person approves account access or one repository in the browser.
 
 The work connection of the CLI cannot import repositories or create tasks. For that, read ${origin}/auth.md and ask for setup access. The person selects a repository under their username or an organization. An organization is optional. braid-git is not published on npm. To build the full CLI from Braid's source, run npm ci && npm run build:cli. Then run node /path/to/braid/cli/dist/braid.mjs --help.
 

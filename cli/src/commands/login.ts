@@ -21,7 +21,7 @@ function keep(context: BraidContext, origin: string, approved: v.InferOutput<typ
   if (approved.scope !== 'work') fail(`The owner approved ${approved.scope} access, and braid needs work access to submit changes. Run braid login again and approve it as asked.`);
   if (Date.parse(approved.expiresAt) <= context.now()) fail('The approval had already expired. Run braid login again.');
   saveCredentials(context.env, { origin, accessToken: approved.accessToken, workspaceId: approved.workspaceId, expiresAt: approved.expiresAt });
-  if (wanted && approved.workspaceId !== wanted) fail(`The owner approved repository ${approved.workspaceId}, but ${wanted} is required. That approval was saved; run braid login again and choose ${wanted}.`);
+  if (wanted && approved.workspaceId !== '*' && approved.workspaceId !== wanted) fail(`The owner approved repository ${approved.workspaceId}, but ${wanted} is required. That approval was saved; run braid login again and choose ${wanted}.`);
   return approved;
 }
 
@@ -130,7 +130,7 @@ async function login(this: BraidContext, flags: { url?: string; workspace?: stri
   const approved = flags.email !== undefined ? await emailLogin(this, origin, flags.email, flags.code, wanted) : await agentLogin(this, origin, wanted, flags.link);
   if (!approved) return;
   if (here) startActivityUpload(this, here.root);
-  print(this, `Signed in to ${origin} for repository ${approved.workspaceId} until ${day(approved.expiresAt)}.${here && !here.link ? ' Run braid init to link this repository.' : ''}`);
+  print(this, `Signed in to ${origin} for ${approved.workspaceId === '*' ? 'your account' : `repository ${approved.workspaceId}`} until ${day(approved.expiresAt)}.${here && !here.link ? ' Run braid init to link this repository.' : ''}`);
 }
 
 async function logout(this: BraidContext, flags: { url?: string }) {

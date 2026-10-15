@@ -55,7 +55,7 @@ async function fixture() {
     expect(approved.status).toBe(200);
     return new URL((await json<{ redirect: string }>(approved)).redirect);
   };
-  return { env, directory, security, repository, cookie, call, json, form, tool, register, pkce, consent, answer, authorize, status };
+  return { env, directory, security, people, repository, cookie, call, json, form, tool, register, pkce, consent, answer, authorize, status };
 }
 type Tokens = { access_token: string; refresh_token?: string; token_type: string; expires_in: number; scope: string };
 
@@ -271,4 +271,74 @@ describe('OAuth for MCP clients', () => {
     expect(await f.security.revokeLeakedToken(tokens.refresh_token!)).toMatchObject({ workspaceId: f.repository.id });
     expect((await f.tool(tokens.access_token, 'get_repository')).status).toBe(401);
   });
+});
+
+
+describe('account-wide OAuth access', () => {
+  it.each(['read', 'work'] as const)('uses one %s approval across repositories and follows membership changes', async scope => {
+    const f = await fixture();
+    const other = organizationWithRepository(f.directory, maya, 'Other', 'private');
+    const stranger = organizationWithRepository(f.directory, { id: 'other-user', email: 'other@example.test', name: 'Other' }, 'Stranger', 'private');
+    const client = await f.register({ client_name: 'Account client', redirect_uris: ['http://localhost/callback'], token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'] });
+    const { verifier, challenge } = await f.pkce();
+    const request = { response_type: 'code', client_id: client.client_id, redirect_uri: 'http://localhost/callback', code_challenge: challenge, code_challenge_method: 'S256', scope };
+    const redirect = await f.authorize(request, { workspaceId: '*', scope });
+    const tokens = await f.json<Tokens>(await f.form('/oauth/token', { grant_type: 'authorization_code', client_id: client.client_id, code: redirect.searchParams.get('code')!, redirect_uri: request.redirect_uri, code_verifier: verifier }));
+    const listed = await f.json<{ result: { structuredContent: { repositories: { workspaceId: string; address: string }[] } } }>(await f.tool(tokens.access_token, 'list_repositories'));
+    expect(listed.result.structuredContent.repositories.map(repo => repo.workspaceId).sort()).toEqual([f.repository.id, other.workspaces[0].id].sort());
+    for (const repo of listed.result.structuredContent.repositories) {
+      const result = await f.json(await f.tool(tokens.access_token, 'get_repository', { repository: repo.address }));
+      expect(JSON.stringify(result)).toContain(`Default branch main at ${head}`);
+    }
+    expect((await f.tool(tokens.access_token, 'get_repository', { repository: stranger.workspaces[0].id })).status).toBe(404);
+    if (scope === 'read') expect((await f.tool(tokens.access_token, 'create_pull_request', { repository: f.repository.id })).status).toBe(403);
+    // Account access never freezes membership at approval time.
+    f.people.ctx.storage.sql.exec('DELETE FROM members WHERE team_id = ? AND user_id = ?', other.id, maya.id);
+    expect((await f.tool(tokens.access_token, 'get_repository', { repository: other.workspaces[0].id })).status).toBe(404);
+    const rotated = await f.json<Tokens>(await f.form('/oauth/token', { grant_type: 'refresh_token', client_id: client.client_id, refresh_token: tokens.refresh_token! }));
+    expect(rotated.access_token).toBeTruthy();
+    expect(JSON.stringify(await f.json(await f.tool(rotated.access_token, 'get_repository', { repository: f.repository.id })))).toContain(head);
+    const connections = await f.security.agents(maya.id);
+    await f.security.revokeAgent(maya.id, connections[0].id);
+    expect((await f.tool(rotated.access_token, 'list_repositories')).status).toBe(401);
+  });
+
+  it('keeps an existing repository grant restricted when tools select another repository', async () => {
+    const f = await fixture();
+    const other = organizationWithRepository(f.directory, maya, 'Other', 'private');
+    const token = await mintMcpAccess(f.env, { grant: 'restricted', user: maya, workspace: f.repository.id, team: 't', scope: 'work', agent: 'restricted', name: 'Restricted', aud: resource, client: 'client', exp: Date.now() + 60_000 });
+    expect((await f.tool(token, 'get_repository', { repository: other.workspaces[0].id })).status).toBe(403);
+    const listed = await f.json<{ result: { structuredContent: { repositories: { workspaceId: string }[] } } }>(await f.tool(token, 'list_repositories'));
+    expect(listed.result.structuredContent.repositories.map(repo => repo.workspaceId)).toEqual([f.repository.id]);
+  });
+});
+
+it('approves account access through a device code and pins session tokens to the selected repository', async () => {
+  const f = await fixture();
+  const deviceCode = 'account-device-code';
+  await f.security.startDevice(await digest(deviceCode), 'ABCD2345', 'Local agent', 'work');
+  const approved = await f.call('/api/agent/requests/ABCD2345', { method: 'POST', headers: { cookie: f.cookie, origin, 'content-type': 'application/json' }, body: JSON.stringify({ workspaceId: '*', scope: 'work' }) });
+  expect(approved.status).toBe(200);
+  const grant = await f.json<{ accessToken: string; workspaceId: string }>(await f.call('/api/agent/token', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceCode }) }));
+  expect(grant.workspaceId).toBe('*');
+  const authorization = `Bearer ${grant.accessToken}`;
+  const list = await f.call('/api/agent/repositories', { headers: { authorization } });
+  expect(list.status).toBe(200);
+  const session = await f.call('/api/agent/session', { method: 'POST', headers: { authorization, 'content-type': 'application/json', 'x-braid-workspace': f.repository.id }, body: '{}' });
+  expect(session.status).toBe(200);
+  const access = await f.json<{ accessToken: string; workspaceId: string }>(session);
+  expect(access.workspaceId).toBe(f.repository.id);
+  const other = organizationWithRepository(f.directory, maya, 'Other', 'private');
+  expect((await f.call('/api/queue', { headers: { authorization: `Bearer ${access.accessToken}`, 'x-braid-workspace': other.workspaces[0].id } })).status).toBe(403);
+});
+
+it('authorizes an account with no repositories', async () => {
+  const f = await fixture();
+  f.people.ctx.storage.sql.exec('DELETE FROM members WHERE user_id = ?', maya.id);
+  const client = await f.register({ client_name: 'New account', redirect_uris: ['http://localhost/callback'], token_endpoint_auth_method: 'none' });
+  const { verifier, challenge } = await f.pkce();
+  const request = { response_type: 'code', client_id: client.client_id, redirect_uri: 'http://localhost/callback', code_challenge: challenge, code_challenge_method: 'S256', scope: 'work' };
+  const redirect = await f.authorize(request, { workspaceId: '*' });
+  const tokens = await f.json<Tokens>(await f.form('/oauth/token', { grant_type: 'authorization_code', client_id: client.client_id, code: redirect.searchParams.get('code')!, redirect_uri: request.redirect_uri, code_verifier: verifier }));
+  expect(await f.json(await f.tool(tokens.access_token, 'list_repositories'))).toMatchObject({ result: { structuredContent: { repositories: [] } } });
 });

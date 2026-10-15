@@ -37,6 +37,8 @@ export interface HostedFacts {
 }
 export type HostedEnvironment = HostedState & HostedFacts;
 /** `fleet` lets an orchestrator mint a separate identity for each agent it runs under one owner approval. */
+/** Account grants follow current membership; repository IDs keep existing grants restricted. */
+export const ACCOUNT_ACCESS = '*';
 export type AgentScope = 'read' | 'setup' | 'work' | 'fleet';
 /**
  * An MCP client's OAuth request as its consent page shows it: the name the client gives itself, where the browser

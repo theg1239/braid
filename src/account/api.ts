@@ -130,8 +130,8 @@ export const accountApi = {
 
 /** What each agent permission allows, in the words the approval screen and the connection list share. */
 export const AGENT_SCOPE: Record<AgentScope, { label: string; allows: string }> = {
-  work: { label: 'Local work', allows: 'Read this repository, share progress and submit proposals for seven days. You can revoke access at any time. Git access is read-only; merging requires your approval.' },
-  read: { label: 'Read', allows: 'Read the repository, tasks and context.' },
-  setup: { label: 'Set up', allows: 'Read everything, create or import the repository, add context and start tasks.' },
+  work: { label: 'Local work', allows: 'Read code, share progress and open pull requests within your permissions. Access lasts seven days and can be revoked anytime.' },
+  read: { label: 'Read', allows: 'Read code, tasks and context within your permissions.' },
+  setup: { label: 'Set up', allows: 'Set up repositories, add context and start tasks within your permissions.' },
   fleet: { label: 'Agent fleet', allows: 'Run many agents under this approval for seven days. Each agent gets its own identity, earns trust separately and submits changes that your policy decides; none can approve or merge.' },
 };
