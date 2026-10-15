@@ -414,3 +414,14 @@
 }
 
 .new-repo__preview { overflow-wrap: anywhere; }
+
+.add-code__commands {
+  overflow-x: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.8;
+  white-space: pre;
+}

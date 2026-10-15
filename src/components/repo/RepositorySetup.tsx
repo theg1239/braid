@@ -6,6 +6,7 @@ import { useIdempotencyKey, useNow } from '../../lib/hooks';
 import { navigate, paths } from '../../lib/router';
 import { useDocumentTitle } from '../../lib/title';
 import { canWrite, useSnapshot, useWorkspace } from '../../store/workspace';
+import { CopyButton } from '../ui/CopyButton';
 import { EmptyPanel } from '../ui/States';
 import { repositoryUrlError } from '../../../shared/repository-url';
 import type { GitHubRepository, GitHubRepositorySelection } from '../../../shared/github';
@@ -20,7 +21,7 @@ import '../../styles/new.css';
 const NAME = /^[a-z][a-z0-9-]{1,47}$/;
 const NAME_CHARACTERS = /^[a-z][a-z0-9-]*$/;
 
-type RepositorySource = 'github' | 'sample' | 'import';
+type RepositorySource = 'github' | 'sample' | 'import' | 'blank';
 
 /**
  * Creates the repository's code: imported, or the sample. Code that is ready at once opens; an
@@ -36,7 +37,7 @@ function useCreateProject() {
     try {
       const created = await api.createProject(input, attempt.key(input));
       attempt.settle();
-      if (!('importing' in created)) toasts.add({ title: source === 'sample' ? 'Sample added' : 'Repository imported', description: created.name, variant: 'success' });
+      if (!('importing' in created)) toasts.add({ title: source === 'sample' ? 'Sample added' : source === 'blank' ? 'Repository created' : 'Repository imported', description: created.name, variant: 'success' });
       await Promise.all([refresh(), refreshAccount()]);
       navigate(paths.home());
     } catch (err) {
@@ -199,7 +200,7 @@ export function RepositorySetup() {
   const fixedName = repository.workspace ? repositoryName(repository.workspace.slug) : null;
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  const [pending, setPending] = useState<'url' | 'sample' | number | null>(null);
+  const [pending, setPending] = useState<'url' | 'sample' | 'blank' | number | null>(null);
   const [error, setError] = useState<string | null>(null);
   // A stopped import can give way to another source: the server releases it when Artifacts kept nothing.
   const [choosing, setChoosing] = useState(false);
@@ -219,7 +220,7 @@ export function RepositorySetup() {
     );
   }
 
-  const run = async (key: 'url' | 'sample' | number, input: Omit<CreateProjectInput, 'name'>, source: RepositorySource, fallbackName?: string) => {
+  const run = async (key: 'url' | 'sample' | 'blank' | number, input: Omit<CreateProjectInput, 'name'>, source: RepositorySource, fallbackName?: string) => {
     const chosen = fixedName ?? (name || (fallbackName ? repositoryName(fallbackName) : ''));
     if (!NAME.test(chosen) || pending !== null) return;
     setPending(key);
@@ -243,6 +244,12 @@ export function RepositorySetup() {
           <Input label="Name" value={name} onChange={(event) => setName(event.target.value.toLowerCase())} placeholder="webhook-relay" maxLength={48} passwordManagerIgnore />
         )}
         {error ? <Banner variant="error" size="sm" description={error} /> : null}
+        <section className="add-code__card" aria-labelledby="add-code-blank">
+          <h2 id="add-code-blank"><FolderSimpleDashedIcon size={16} aria-hidden="true" />Start from scratch</h2>
+          <Button variant="primary" loading={pending === 'blank'} disabled={busy || (!fixedName && !nameReady)} onClick={() => void run('blank', { template: 'blank' }, 'blank')}>
+            Create empty repository
+          </Button>
+        </section>
         {hasGitHub ? (
           <section className="add-code__card" aria-labelledby="add-code-github">
             <h2 id="add-code-github">
@@ -306,4 +313,22 @@ export function NoRepositoryPanel() {
       }
     />
   );
+}
+
+/** An unborn repository has a remote but no files, branch tip, or commit yet. */
+export function EmptyRepository() {
+  const { project } = useSnapshot();
+  const repository = useRepository();
+  const origin = window.location.origin;
+  const scope = repository.scope ?? 'owner-v1';
+  const remote = `${origin}/git/${scope}.git`;
+  const commands = `curl -fsSL --create-dirs -o ~/.braid/braid-git.mjs ${origin}/cli/braid-git.mjs
+node ~/.braid/braid-git.mjs login --url ${origin} --workspace ${scope}
+node ~/.braid/braid-git.mjs init --url ${origin} --workspace ${scope}
+git push -u braid HEAD:main`;
+  return <div className="page"><section className="add-code" aria-labelledby="empty-repository-title">
+    <header className="add-code__head"><h1 id="empty-repository-title">{project.name} is empty</h1></header>
+    <section className="add-code__card"><h2>Git remote</h2><Input aria-label="Git remote" value={remote} readOnly /><CopyButton text={remote} label="Copy remote" size="sm" /></section>
+    <section className="add-code__card"><h2>Push your first commit</h2><p>Run these commands in your local Git repository after making your first commit.</p><pre className="add-code__commands"><code>{commands}</code></pre><CopyButton text={commands} label="Copy commands" size="sm" /><p>After the first push, use <code>git push braid HEAD:refs/for/main</code> to open a pull request.</p></section>
+  </section></div>;
 }

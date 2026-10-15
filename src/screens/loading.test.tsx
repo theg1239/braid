@@ -80,7 +80,10 @@ describe('Code reads', () => {
   it('shows an empty repository after its snapshot confirms there is no commit', () => {
     state.head = '';
     const html = renderToStaticMarkup(<CodeScreen />);
-    expect(html).toContain('No files yet');
+    expect(html).toContain('the-everything-assistant is empty');
+    expect(html).toContain('https://braid.test/git/repo.git');
+    expect(html).toContain('git push -u braid HEAD:main');
+    expect(html).toContain('Copy commands');
     expect(html).not.toContain('Loading files');
     expect(html).not.toContain('Loading README');
   });

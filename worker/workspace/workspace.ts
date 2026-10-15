@@ -61,7 +61,7 @@ type StagedProposal = { files: Record<string, GitFileEdit>; summary: string; rat
 type StagedMerge = { files: Record<string, GitFileEdit>; fingerprint: string; preparedCommit?: string };
 type MirrorJob = { workspaceId: string; fullName: string; userId?: string };
 /** An import on its way. `replaces` names a full mirror copy that keeps serving until this one lands, then goes. */
-type PendingProject = { name: string; displayName: string; description: string; sourceUrl?: string; github?: GitHubRepositorySelection; sourcePublic?: boolean; remote?: string; branch?: string; attempted?: boolean; mirror?: MirrorJob;
+type PendingProject = { name: string; displayName: string; description: string; template?: 'blank'; sourceUrl?: string; github?: GitHubRepositorySelection; sourcePublic?: boolean; remote?: string; branch?: string; attempted?: boolean; mirror?: MirrorJob;
   authorization?: Authorization; initialToken?: string; startedAt?: string; error?: string; replaces?: string;
   /**
    * A mirror snapshot copied in parts (github/mirror-parts.ts) into its own repository, the failed import it took over
@@ -1167,7 +1167,7 @@ export class Workspace extends DurableObject<BraidEnv> {
     if (this.data.capabilities.mode !== 'live') throw new HttpError(403, 'Unlock the live workspace before creating a repository.');
     if (this.busy()) throw new HttpError(409, 'Wait for the active operation to finish.');
     if (this.data.project.id) throw new HttpError(409, 'This workspace already has a repository.');
-    const { name: displayName, description, github, ...input } = parse(projectBody, body);
+    const { name: displayName, description, github, template, ...input } = parse(projectBody, body);
     const name = authorization ? `r-${authorization.workspaceId.replaceAll('-', '')}-${displayName.slice(0, 24)}` : displayName;
     if (github && (!authorization || authorization.connectionDigest)) throw new HttpError(403, 'Choose and authorize GitHub repositories in Braid.');
     let sourceUrl = input.sourceUrl;
@@ -1182,10 +1182,10 @@ export class Workspace extends DurableObject<BraidEnv> {
       const pendingKey = 'pending-project';
       let pending = await this.ctx.storage.get<PendingProject>(pendingKey);
       if (pending?.sourceUrl && repositoryUrlError(pending.sourceUrl) && await this.releaseMissingProject(pending)) pending = undefined;
-      const same = pending && pending.name === name && pending.sourceUrl === sourceUrl && pending.description === description && JSON.stringify(pending.github) === JSON.stringify(github);
+      const same = pending && pending.name === name && pending.sourceUrl === sourceUrl && pending.description === description && pending.template === template && JSON.stringify(pending.github) === JSON.stringify(github);
       // A stopped import gives way to another choice once Artifacts confirms it left nothing behind.
       if (pending?.error && !same && await this.releaseMissingProject(pending)) pending = undefined;
-      if (pending && (pending.name !== name || pending.sourceUrl !== sourceUrl || pending.description !== description || JSON.stringify(pending.github) !== JSON.stringify(github)))
+      if (pending && (pending.name !== name || pending.sourceUrl !== sourceUrl || pending.description !== description || pending.template !== template || JSON.stringify(pending.github) !== JSON.stringify(github)))
         throw new HttpError(409, 'A repository is already being prepared in this workspace. Retry the original request with the same name and source.');
       // Choosing the same source again restarts a stopped import, as Try again does.
       if (pending?.error) { this.creating = false; return await this.retryImport({}, receipt, authorization); }
@@ -1196,7 +1196,7 @@ export class Workspace extends DurableObject<BraidEnv> {
         const globalBudget = await security.consume('repositories:global', 100, 86_400_000);
         if (!globalBudget.allowed) throw new HttpError(429, 'Repository creation capacity is reached for today.');
         // Reserve before contacting Artifacts, so a lost response cannot create a second repository.
-        pending = { name, displayName, description, sourceUrl, authorization, ...(github ? { github } : {}), ...(githubRepo ? { branch: githubRepo.defaultBranch } : {}), ...(sourceUrl ? { sourcePublic: githubRepo ? !githubRepo.private : true } : {}) };
+        pending = { name, displayName, description, template, sourceUrl, authorization, ...(github ? { github } : {}), ...(githubRepo ? { branch: githubRepo.defaultBranch } : {}), ...(sourceUrl ? { sourcePublic: githubRepo ? !githubRepo.private : true } : {}) };
         await this.ctx.storage.put(pendingKey, pending);
       }
       if (pending.sourceUrl && pending.startedAt) return this.importAccepted(pending, receipt);
@@ -1247,12 +1247,16 @@ export class Workspace extends DurableObject<BraidEnv> {
         using repo = await artifactsOf(this.env).get(name);
         const history = await repo.log({ ref: branch, limit: 1 });
         head = history[0]?.hash;
-        if (!head) {
+        if (!head && template !== 'blank') {
           await checkAuthorization(this.env, authorization);
           const token = await repo.createToken('write', 900);
           try { head = await (await gitWrites()).commitFiles({ remote, token: token.plaintext, branch, files: { ...BASE_FILES }, message: 'Initialize Relay webhook project in Braid', initialize: true }); }
           finally { await repo.revokeToken(token.plaintext).catch(() => { /* The initialization token expires after fifteen minutes. */ }); }
         }
+      }
+      if (!head && template === 'blank') {
+        await this.ctx.storage.put('agent-initialization', true);
+        return Response.json(await this.finalizeProject(pending, '', receipt), { status: 201 });
       }
       if (!head) {
         pending.startedAt = now();
@@ -1392,11 +1396,11 @@ export class Workspace extends DurableObject<BraidEnv> {
       if (readme) await fileAt(reader, head, readme.path);
     })().catch(error => logFailure('import_code_warm_failed', error, { repository: name })));
     if (sourceUrl) await this.ctx.storage.put('repository-source', { public: pending.sourcePublic ?? (!github && !!sourceUrl) });
-    if (authorization) await directoryOf(this.env).repositoryImported(authorization.workspaceId, sourceUrl ? pending.sourcePublic ?? (!github && !!sourceUrl) : undefined, description, true);
+    if (authorization) await directoryOf(this.env).repositoryImported(authorization.workspaceId, sourceUrl ? pending.sourcePublic ?? (!github && !!sourceUrl) : undefined, description, !!head);
     if (!this.data.project.id || this.data.project.id === pending.replaces) {
       const branch = pending.branch || 'main';
-      this.data.project = { id: name, name: displayName, description, remote: pending.remote, branch, head, stack: sourceUrl ? [] : ['TypeScript', 'Workers', 'Artifacts'], ...(sourceUrl ? { branches: [branch] } : {}) };
-      this.data.files = sourceUrl ? {} : { ...BASE_FILES };
+      this.data.project = { id: name, name: displayName, description, remote: pending.remote, branch, head, stack: sourceUrl || pending.template === 'blank' ? [] : ['TypeScript', 'Workers', 'Artifacts'], ...(sourceUrl ? { branches: [branch] } : {}) };
+      this.data.files = sourceUrl ? {} : pending.template === 'blank' ? {} : { ...BASE_FILES };
       this.event('fork', sourceUrl ? 'Imported a repository into Artifacts' : 'Created a Git repository in Artifacts', name);
       if (sourceUrl) {
         // The default branch opens now; the others follow from the alarm.

@@ -444,8 +444,9 @@ export const project = v.pipe(body({
   name: v.pipe(text('Repository name', 48), v.regex(/^[a-z][a-z0-9-]{1,47}$/, 'Use 2–48 lowercase letters, digits, and hyphens, starting with a letter.')),
   description: v.optional(v.pipe(v.string('The description is text.'), v.transform(value => value.slice(0, 300))), ''),
   github: v.optional(githubSelection),
+  template: v.optional(v.literal('blank')),
   sourceUrl: v.optional(text('Repository URL', 500)),
-}, 'Send a repository name.'), v.check(input => !(input.github && input.sourceUrl), 'Choose a GitHub repository or enter a public URL, not both.'));
+}, 'Send a repository name.'), v.check(input => [input.github, input.sourceUrl, input.template].filter(Boolean).length <= 1, 'Choose one repository source.'));
 export const projectImportRetry = body({}, 'Send an empty object to retry the repository import.');
 export const contextNote = body({
   title: text('Title', 120),

@@ -150,6 +150,22 @@ describe('repository browser API', () => {
     expect(new Uint8Array(await binary.arrayBuffer())).toEqual(bytes);
     expect((await (await f.request('/api/repository?path=large.txt&download=1')).text()).length).toBe(500_001);
   });
+  it("serves a README's images and videos under a sandbox, and nothing else as media", async () => {
+    const f = await fixture(); await launch(f, { execution: 'local' });
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
+    f.baseFiles['docs/logo.svg'] = svg; f.baseFiles['demo.mp4'] = 'mp4';
+    const media = await f.request('/api/repository?path=docs/logo.svg&media=1');
+    expect(media.status).toBe(200);
+    expect(await media.text()).toBe(svg);
+    expect(media.headers.get('content-type')).toBe('image/svg+xml');
+    expect(media.headers.get('content-security-policy')).toBe("default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    expect(media.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(media.headers.get('cache-control')).toMatch(/^public, max-age=/);
+    expect((await f.request('/api/repository?path=demo.mp4&media=1')).headers.get('content-type')).toBe('video/mp4');
+    expect((await f.request('/api/repository?path=README.md&media=1')).status).toBe(415);
+    f.repo.readBlob.mockRejectedValueOnce(Object.assign(new Error('too large'), { code: 'MEMORY_LIMIT' }));
+    expect((await f.request('/api/repository?path=demo.mp4&media=1')).status).toBe(413);
+  });
   it('reads symlink objects without following them and identifies submodules without reading blobs', async () => {
     const f = await fixture(); await launch(f, { execution: 'local' });
     f.baseModes['link'] = '120000'; f.baseModes['module'] = '160000';
@@ -217,6 +233,18 @@ describe('durable repository operations', () => {
     expect(warmBlame).toHaveBeenCalledExactlyOnceWith('team:team-1:repository:workspace-1', head);
   });
 
+  it('starts from scratch without any files or initial commit', async () => {
+    const f = await fixture(); f.repo.state.head = '';
+    const result = await f.request('/api/project', { name: 'project', template: 'blank' });
+    expect(result.status).toBe(201);
+    expect(await result.json()).toMatchObject({ name: 'project', head: '', stack: [] });
+    expect(commitFiles).not.toHaveBeenCalled();
+    expect(await f.current().agentInitializationAllowed()).toBe(true);
+    await f.restart();
+    expect(await f.current().agentInitializationAllowed()).toBe(true);
+    expect((await f.state()).files).toEqual({});
+    expect(f.repo.revokeToken).toHaveBeenCalled();
+  });
   it('returns an immediately ready import as 201 and completes the sample without polling', async () => {
     const f = await fixture(undefined, { headers: ownerHeaders });
     const response = await f.request('/api/project', { name: 'project', sourceUrl: 'https://github.com/example/project.git' });

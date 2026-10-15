@@ -52,6 +52,7 @@ export const retryDelay = () => Math.max(0, (rateLimit?.retryAt ?? 0) - Date.now
 
 export interface CreateProjectInput {
   name: string;
+  template?: 'blank';
   description?: string;
   sourceUrl?: string;
   github?: GitHubRepositorySelection;

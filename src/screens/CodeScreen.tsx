@@ -22,7 +22,7 @@ import { ReadmeSkeleton } from '../components/ui/ScreenSkeleton';
 import { ConnectButton } from '../components/repo/ConnectButton';
 import { ImportBar } from '../components/repo/ImportBar';
 import { MirrorCodeHeader } from '../components/repo/MirrorCodeHeader';
-import { RepositorySetup } from '../components/repo/RepositorySetup';
+import { EmptyRepository, RepositorySetup } from '../components/repo/RepositorySetup';
 import { FileView, isMarkdown, type FileRender } from '../components/code';
 import { BlameView } from '../components/code/blame';
 import { BranchMenu, referenceLabel } from '../components/code/BranchMenu';
@@ -62,6 +62,7 @@ export function CodeScreen() {
     ? <MirrorError message={importing.code === MIRROR_TOO_LARGE ? importing.error : 'Could not mirror this repository.'} code={importing.code} address={route.repo} />
     : <MirrorImport importing={importing} source={mirror.source} branch={project.branch} route={route} />;
   if (!project.id && !streamed) return <RepositorySetup />;
+  if (project.id && !project.head) return <EmptyRepository />;
 
   return (
     <Branch.Provider value={branch}>
