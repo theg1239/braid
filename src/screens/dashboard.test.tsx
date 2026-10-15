@@ -7,6 +7,7 @@ import type { InboxData, InboxItem } from '../dashboard/inbox';
 
 vi.mock('../account/AccountProvider', () => ({ useAccount: () => ({ account }) }));
 vi.mock('../account/ClaimOwner', () => ({ ClaimOwner: () => <button>Claim account</button> }));
+vi.mock('../dashboard/Feed', () => ({ Feed: () => null }));
 vi.mock('../lib/live', () => ({ useLive: vi.fn() }));
 vi.mock('../lib/api', () => ({ request: vi.fn() }));
 vi.mock('../lib/hooks', () => ({ useNow: () => Date.parse('2026-10-12T12:00:00Z') }));

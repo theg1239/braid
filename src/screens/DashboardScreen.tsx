@@ -7,6 +7,7 @@ import { plural } from '../lib/format';
 import { EXAMPLE_ADDRESS, addressPath, paths } from '../lib/router';
 import { useInbox, type InboxGroups, type InboxItem } from '../dashboard/inbox';
 import { setInboxBadge } from '../dashboard/badge';
+import { Feed } from '../dashboard/Feed';
 import { useAccount } from '../account/AccountProvider';
 import { ClaimOwner } from '../account/ClaimOwner';
 import { Label, PullStateIcon } from '../components/pulls/Bits';
@@ -18,7 +19,7 @@ import '../styles/dashboard.css';
 
 /**
  * Signed in, `/` is the dashboard: what needs the person across their repositories and what their
- * agents merged lately, beside their organizations’ repositories with New repository.
+ * agents merged lately, then what everyone else is building, beside their organizations’ repositories.
  */
 export function DashboardScreen() {
   const { account } = useAccount();
@@ -29,7 +30,7 @@ export function DashboardScreen() {
 
   useEffect(() => setInboxBadge(needsYou), [needsYou]);
 
-  if (!teams.some(team => team.workspaces.length)) return <FirstRun canCreate={canCreate} />;
+  if (!teams.some(team => team.workspaces.length)) return <FirstRun canCreate={canCreate} now={now} />;
 
   return (
     <div className="page dash">
@@ -56,6 +57,7 @@ export function DashboardScreen() {
       <aside className="dash__side">
         <Repositories teams={teams} open={data.open} />
       </aside>
+      <Feed now={now} />
     </div>
   );
 }
@@ -75,7 +77,8 @@ function InboxSections({ groups, loading, now, incomplete }: { groups: InboxGrou
 }
 
 function InboxSection({ section, items, now }: { section: typeof SECTIONS[number]; items: InboxItem[]; now: number }) {
-  const [shown, setShown] = useState(8);
+  // Merges are news, not work: the latest few, with the rest a click away.
+  const [shown, setShown] = useState(section.key === 'merged' ? 3 : 8);
   return (
     <section className={`dash__section--${section.key}`} aria-labelledby={`inbox-${section.key}`}>
       <h2 id={`inbox-${section.key}`} className="dash__h2">
@@ -175,7 +178,7 @@ function Repositories({ teams, open }: { teams: Organization[]; open: Record<str
 }
 
 /** Signed in without a repository: one way to start, with the example beside it; or no organization when sign-up is closed. */
-function FirstRun({ canCreate }: { canCreate: boolean }) {
+function FirstRun({ canCreate, now }: { canCreate: boolean; now: number }) {
   return (
     <div className="page dash dash--first">
       <header className="dash__head">
@@ -198,6 +201,7 @@ function FirstRun({ canCreate }: { canCreate: boolean }) {
           </LinkButton>
         </div>
       </section>
+      <Feed now={now} />
     </div>
   );
 }
