@@ -1025,6 +1025,8 @@ export class Workspace extends DurableObject<BraidEnv> {
         } finally { await repo.revokeToken(token).catch(() => { /* The sync token expires after fifteen minutes. */ }); }
       }
       await directoryOf(this.env).mirrorUpdated(mirror.workspaceId, { syncedAt: now(), branch: source.branch, head: source.head });
+      const key = this.repositoryKey!;
+      await trunkOf(this.env, key).mirrored(key, source.branch, source.head).catch(error => logFailure('trunk_mirrored_failed', error));
       // A mirror imported before history was copied in parts copies the rest once; a copy left waiting resumes.
       const copying = await this.ctx.storage.get<BranchJob>('branch-copy');
       const history = await this.ctx.storage.get<HistoryState>('history-copy');

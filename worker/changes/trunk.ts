@@ -433,6 +433,15 @@ export class Trunk extends DurableObject<BraidEnv> {
       ...(state.message ? { message: state.message } : {}), ...(state.checkedAt ? { checkedAt: state.checkedAt } : {}), ...(state.mirroredHead ? { mirroredHead: state.mirroredHead } : {}) };
   }
 
+  /** A public mirror's refresh moved the branch outside the queue, so line maps and the cached head start again. */
+  async mirrored(key: string, branch: string, head: string) {
+    this.bind(key);
+    if (this.meta.get('head') === head && this.meta.get('branch') === branch) return;
+    this.attribution.dropMaps();
+    this.policyCache = undefined;
+    this.headCache = { at: Date.now(), head };
+    this.meta.set('head', head); this.meta.set('branch', branch);
+  }
   async githubLink(key: string): Promise<GitHubLinkStatus | null> {
     this.bind(key);
     const state = this.linkState();

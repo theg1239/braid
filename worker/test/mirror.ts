@@ -6,6 +6,7 @@ import api from '../http/api';
 import { Directory } from '../accounts/directory';
 import { Security } from '../accounts/security';
 import { Workspace } from '../workspace/workspace';
+import { Trunk } from '../changes/trunk';
 import { digest, sessionToken } from '../http/auth';
 import { concat, FLUSH, pktLine } from '../git/transport';
 import { storageFixture } from './storage';
@@ -57,7 +58,7 @@ export async function mirrorFixture() {
     return baseFetch(input, init);
   });
   vi.stubGlobal('fetch', network);
-  const directoryDb = storageFixture(), securityDb = storageFixture(), workspaces = new Map<string, { db: ReturnType<typeof storageFixture>; workspace: Workspace }>();
+  const directoryDb = storageFixture(), securityDb = storageFixture(), workspaces = new Map<string, { db: ReturnType<typeof storageFixture>; workspace: Workspace }>(), trunks = new Map<string, { db: ReturnType<typeof storageFixture>; trunk: Trunk }>();
   let completeImport!: () => void;
   const gate = new Promise<void>(resolve => { completeImport = resolve; });
   let imported = false, current = '';
@@ -105,6 +106,7 @@ export async function mirrorFixture() {
   const env = { ...github.env, AUTH_MODE: 'github', LIVE_ENABLED: 'true', SIGNUP_ENABLED: 'true', PUBLIC_ORIGIN: 'https://braid.example',
     DIRECTORY: { idFromName: (name: string) => name, get: () => directory }, SECURITY: { idFromName: (name: string) => name, get: () => security },
     WORKSPACES: { idFromName: (name: string) => name, get: (name: string) => getWorkspace(name).workspace, getByName: (name: string) => getWorkspace(name).workspace },
+    TRUNKS: { getByName: (name: string) => getTrunk(name) },
     ARTIFACTS: artifacts, ASSETS: { fetch: async () => new Response('<html><head><title>Braid</title></head><body></body></html>', { headers: { 'content-type': 'text/html' } }) },
     IP_LIMITER: { limit: async () => ({ success: true }) }, ANONYMOUS_LIMITER: { limit: async () => ({ success: true }) }, PUBLIC_EXPENSIVE_LIMITER: { limit: async () => ({ success: true }) },
   } as unknown as BraidEnv;
@@ -112,6 +114,11 @@ export async function mirrorFixture() {
   vi.spyOn(security, 'githubIdentity').mockImplementation(id => profiles.get(id) ?? null);
   vi.spyOn(security, 'githubConnection').mockImplementation(async id => profiles.has(id) ? { login: profiles.get(id)!.login, connectedAt: '' } : null);
   vi.spyOn(security, 'githubAccessToken').mockImplementation(async id => ({ ok: true, token: `own-${id}` }));
+  function getTrunk(name: string) {
+    let found = trunks.get(name);
+    if (!found) { const db = storageFixture(); found = { db, trunk: new Trunk(db.ctx, env) }; trunks.set(name, found); }
+    return found.trunk;
+  }
   function getWorkspace(key: string) {
     let found = workspaces.get(key);
     if (!found) { const db = storageFixture(); found = { db, workspace: new Workspace(db.ctx, env) }; workspaces.set(key, found); }
@@ -121,7 +128,7 @@ export async function mirrorFixture() {
     if (user) { const token = await sessionToken(env.SESSION_SECRET); await security.issue(await digest(token), Date.now() + 600_000, user); headers.cookie = `__Host-braid-session=${token}`; }
     return api.fetch(new Request(`https://braid.example${path}`, { ...init, headers: { 'cf-connecting-ip': '198.51.100.2', ...headers } }), env);
   };
-  const drain = async () => { for (let n = 0; n < 3; n++) { await directoryDb.settled(); for (const { db } of workspaces.values()) { await db.ready(); await db.settled(); } } };
-  const close = async () => { completeImport(); await drain(); for (const { db } of workspaces.values()) db.db.close(); directoryDb.db.close(); securityDb.db.close(); await source.close(); await target.close(); };
+  const drain = async () => { for (let n = 0; n < 3; n++) { await directoryDb.settled(); for (const { db } of [...workspaces.values(), ...trunks.values()]) { await db.ready(); await db.settled(); } } };
+  const close = async () => { completeImport(); await drain(); for (const { db } of [...workspaces.values(), ...trunks.values()]) db.db.close(); directoryDb.db.close(); securityDb.db.close(); await source.close(); await target.close(); };
   return { env, directory, directoryDb, security, state, profiles, github, network, artifacts, source, target, head, first, repo, request, getWorkspace, workspaces, completeImport, drain, close };
 }

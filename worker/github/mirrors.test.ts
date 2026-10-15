@@ -59,6 +59,9 @@ describe('GitHub mirror lifecycle with production-shaped Artifacts', () => {
     await address(f); await f.drain();
     expect(f.target.native(['rev-parse', 'main']).trim()).toBe(next);
     expect(f.directory.mirrorRecord(repo.workspaceId)?.head).toBe(next);
+    // Blame follows the synced head instead of refusing it as an older revision.
+    const blame = await f.request(`/api/blame?path=README.md&ref=${next}`, undefined, { 'x-braid-workspace': repo.workspaceId });
+    expect(blame.status, await blame.clone().text()).not.toBe(400);
     expect(f.network.mock.calls.filter(([url]) => String(url).startsWith('https://github.com')).every(([, init]) => !new Headers(init?.headers).has('authorization'))).toBe(true);
     expect(f.network.mock.calls.some(([url]) => String(url).startsWith('https://api.github.com'))).toBe(false);
   });
