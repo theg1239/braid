@@ -1,0 +1,83 @@
+/* A list that scrolls inside itself shades the edge with more past it. */
+.scroll-area {
+  position: relative;
+  min-width: 0;
+}
+
+.scroll-area__viewport {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.scroll-area__viewport:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.scroll-area::before,
+.scroll-area::after {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  left: 0;
+  height: 28px;
+  opacity: 0;
+  pointer-events: none;
+  content: '';
+  transition: opacity 160ms var(--ease-out);
+}
+
+.scroll-area::before {
+  top: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, oklch(0% 0 0 / 0.55), transparent);
+}
+
+.scroll-area::after {
+  bottom: 0;
+  background: linear-gradient(to top, oklch(0% 0 0 / 0.55), transparent);
+}
+
+.scroll-area[data-above]::before,
+.scroll-area[data-below]::after {
+  opacity: 1;
+}
+
+/* The next page loads as it comes into view; the button is there for a keyboard and shows only on focus. */
+.load-more {
+  display: flex;
+  justify-content: center;
+  min-height: 1px;
+}
+
+.load-more__button {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  color: var(--fg-3);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.load-more__button:focus-visible,
+.load-more[aria-busy] .load-more__button,
+.load-more[data-failed] .load-more__button {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 10px 12px;
+  clip-path: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-area::before, .scroll-area::after { transition: none; }
+}
+.load-more[data-failed] .load-more__button {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

@@ -629,21 +629,23 @@ button.graph__ref:hover .graph__ref-text {
 
 /* The task's steps in the order they ran, one state icon each. */
 .task-steps {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  width: 100%;
+  max-width: 720px;
 }
+
+/* The panel is the scrolling viewport, so the edge shadows sit inside its border. */
+.task-steps .scroll-area__viewport {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--panel);
+}
+
+.task-steps.scroll-area::before { top: 1px; }
+.task-steps.scroll-area::after { bottom: 1px; }
 
 .task-steps__list {
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 720px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-box);
-  background: var(--panel);
 }
 
 .task-step {

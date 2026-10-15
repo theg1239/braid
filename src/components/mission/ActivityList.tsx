@@ -1,15 +1,14 @@
-import { useState } from 'react';
-import { Button } from '@cloudflare/kumo';
 import { CheckCircleIcon, ClockIcon, WarningCircleIcon, XCircleIcon } from '@phosphor-icons/react';
 import type { Activity, Mission } from '../../../shared/types';
 import { isMissionActive } from '../../lib/task-state';
 import { isResolved } from '../../lib/derive';
 import { useNow } from '../../lib/hooks';
+import { ScrollArea } from '../ui/Scroll';
 import { RelativeTime } from '../ui/Time';
 
 type Step = 'done' | 'running' | 'waiting' | 'failed';
-/** Steps shown before "Show all". */
-const LIMIT = 8;
+/** About eight steps show at once; the rest scroll, opening on the latest. */
+const HEIGHT = 8 * 37;
 
 function StepIcon({ step }: { step: Step }) {
   if (step === 'running') return <ClockIcon size={16} className="task-step__icon" aria-label="Running" />;
@@ -24,21 +23,19 @@ function StepIcon({ step }: { step: Step }) {
  * a choice, or failed. One state icon per step, the step, and when, as a running job reads.
  */
 export function ActivityList({ items, mission }: { items: Activity[]; mission: Mission }) {
-  const [expanded, setExpanded] = useState(false);
   const now = useNow();
   if (!items.length) return <p className="quiet">No activity yet.</p>;
   // missionActivity sorts newest first, keeping same-second steps in order, so reversing gives the order they ran.
   const steps = [...items].reverse();
-  const shown = expanded || steps.length <= LIMIT ? steps : steps.slice(steps.length - LIMIT);
   const active = isMissionActive(mission);
   const undecided = mission.collisions.some((collision) => !isResolved(collision));
   const stepOf = (item: Activity, last: boolean): Step =>
     item.type === 'context' ? 'done' : item.type === 'error' ? 'failed' : item.type === 'conflict' && undecided ? 'waiting' : last && active ? 'running' : 'done';
   return (
-    <div className="task-steps">
+    <ScrollArea className="task-steps" maxHeight={HEIGHT} label="Task activity" start="end">
       <ol className="task-steps__list">
-        {shown.map((item, index) => {
-          const step = stepOf(item, index === shown.length - 1);
+        {steps.map((item, index) => {
+          const step = stepOf(item, index === steps.length - 1);
           return (
             <li key={item.id} className="task-step" data-step={step} title={item.detail}>
               <StepIcon step={step} />
@@ -48,11 +45,6 @@ export function ActivityList({ items, mission }: { items: Activity[]; mission: M
           );
         })}
       </ol>
-      {steps.length > LIMIT ? (
-        <Button variant="ghost" size="sm" onClick={() => setExpanded((value) => !value)}>
-          {expanded ? 'Show less' : `Show all ${steps.length}`}
-        </Button>
-      ) : null}
-    </div>
+    </ScrollArea>
   );
 }

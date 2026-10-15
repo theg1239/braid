@@ -11,6 +11,7 @@ import { useNow } from '../../lib/hooks';
 import { paths } from '../../lib/router';
 import { Kbd } from '../ui/Kbd';
 import { RouterLink } from '../ui/Link';
+import { LoadMore } from '../ui/Scroll';
 import { FileRowsSkeleton } from '../ui/ScreenSkeleton';
 import { ErrorPanel } from '../ui/States';
 import { RelativeTime } from '../ui/Time';
@@ -97,9 +98,7 @@ export function Listing({ path, tree, error, pending, more, retry }: { path: str
       {Array.from({ length: Math.ceil(tree.entries.length / PAGE_SIZE) }, (_, page) => <ListingRows key={`${tree.ref}:${path}:${page}`} entries={tree.entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)} ref={tree.ref} path={path} cursor={String(page * PAGE_SIZE)} touching={touching.data} />)}
       {tree.nextCursor ? (
         <li className="listing__more">
-          <Button size="sm" variant="ghost" disabled={pending} onClick={() => void more()}>
-            Load more
-          </Button>
+          <LoadMore more={more} busy={pending} label="Load more files" />
         </li>
       ) : null}
     </ul>

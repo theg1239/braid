@@ -19,6 +19,7 @@ import { PullRow } from '../components/pulls/PullRow';
 import { filterPulls } from '../components/pulls/filtering';
 import { QueueControl } from '../components/queue/QueueControl';
 import { NoRepositoryPanel } from '../components/repo/RepositorySetup';
+import { LoadMore } from '../components/ui/Scroll';
 import { RouterLink } from '../components/ui/Link';
 import { EmptyPanel, ErrorPanel, ErrorNotice } from '../components/ui/States';
 import { PullRowsSkeleton } from '../components/ui/ScreenSkeleton';
@@ -106,13 +107,7 @@ function AgentPulls({ id }: { id: string }) {
         )}
       </div>
       {extra.error ? <Banner variant="error" size="sm" description={extra.error} /> : null}
-      {cursor ? (
-        <div className="list__more">
-          <Button variant="secondary" loading={extra.busy} onClick={() => void loadMore()}>
-            Load more
-          </Button>
-        </div>
-      ) : null}
+      {cursor ? <LoadMore more={loadMore} busy={extra.busy} failed={!!extra.error} label="Load more pull requests" /> : null}
     </div>
   );
 }
@@ -232,13 +227,7 @@ function PullList() {
         )}
       </div>
       {extra.error ? <Banner variant="error" size="sm" description={extra.error} /> : null}
-      {nextCursor ? (
-        <div className="list__more">
-          <Button variant="secondary" loading={extra.busy} onClick={() => void loadMore()}>
-            Load more
-          </Button>
-        </div>
-      ) : null}
+      {nextCursor ? <LoadMore more={loadMore} busy={extra.busy} failed={!!extra.error} label="Load more pull requests" /> : null}
     </div>
   );
 }

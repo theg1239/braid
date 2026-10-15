@@ -3,6 +3,7 @@ import { Banner, Button, Input, Select } from '@cloudflare/kumo';
 import { ArrowClockwiseIcon, CheckIcon, GithubLogoIcon, LockSimpleIcon } from '@phosphor-icons/react';
 import type { GitHubConnection, GitHubInstallation, GitHubRepository, GitHubRepositorySelection } from '../../../shared/github';
 import { api, errorMessage } from '../../lib/api';
+import { LoadMore } from '../ui/Scroll';
 
 /**
  * The person's GitHub repositories, as Vercel lists them for import: the account, a search box,
@@ -256,9 +257,7 @@ export function GitHubPicker({ onPick, onSelect, action = 'Select', picked, pend
             ) : null}
             {nextRepositories ? (
               <li className="gh-picker__more">
-                <Button type="button" variant="ghost" size="sm" loading={busy} disabled={disabled} onClick={() => void loadMore(false)}>
-                  Load more
-                </Button>
+                <LoadMore more={() => loadMore(false)} busy={busy || disabled} failed={!!error} label="Load more repositories" />
               </li>
             ) : null}
           </ul>

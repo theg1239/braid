@@ -6,6 +6,7 @@ import { errorMessage } from '../../lib/api';
 import { primeTree, trees } from '../../lib/reads';
 import { useRepositoryTree } from '../../lib/resources';
 import { RouterLink } from '../ui/Link';
+import { LoadMore } from '../ui/Scroll';
 import { LoadingRegion, SkeletonLine, SkeletonRows } from '../ui/Skeleton';
 import { ErrorPanel } from '../ui/States';
 import { useCodeHref } from './branch';
@@ -62,9 +63,7 @@ function Tree({ path, gitRef, selected, depth }: { path: string; gitRef: string;
       ))}
       {tree?.nextCursor ? (
         <li>
-          <Button size="sm" variant="ghost" disabled={pending} onClick={() => void more()}>
-            Load more
-          </Button>
+          <LoadMore more={more} busy={pending} label="Load more files" />
         </li>
       ) : null}
     </ul>
